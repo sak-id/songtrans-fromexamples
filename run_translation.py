@@ -21,14 +21,12 @@ Fine-tuning the library models for sequence to sequence.
 import logging
 import os
 import sys
-import warnings
 from dataclasses import dataclass, field
 from typing import Optional
 
 import datasets
-import evaluate
 import numpy as np
-from datasets import load_dataset
+from datasets import load_dataset, load_metric
 
 import transformers
 from transformers import (
@@ -53,7 +51,7 @@ from transformers.utils.versions import require_version
 
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
-check_min_version("4.37.0.dev0")
+check_min_version("4.21.0.dev0")
 
 require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/translation/requirements.txt")
 
@@ -79,7 +77,8 @@ class ModelArguments:
         default=None, metadata={"help": "Pretrained tokenizer name or path if not the same as model_name"}
     )
     cache_dir: Optional[str] = field(
-        default=None,
+        # default=None,
+        default="/raid/ieda/dataset_cache",
         metadata={"help": "Where to store the pretrained models downloaded from huggingface.co"},
     )
     use_fast_tokenizer: bool = field(
@@ -90,28 +89,12 @@ class ModelArguments:
         default="main",
         metadata={"help": "The specific model version to use (can be a branch name, tag name or commit id)."},
     )
-    token: str = field(
-        default=None,
-        metadata={
-            "help": (
-                "The token to use as HTTP bearer authorization for remote files. If not specified, will use the token "
-                "generated when running `huggingface-cli login` (stored in `~/.huggingface`)."
-            )
-        },
-    )
     use_auth_token: bool = field(
-        default=None,
-        metadata={
-            "help": "The `use_auth_token` argument is deprecated and will be removed in v4.34. Please use `token` instead."
-        },
-    )
-    trust_remote_code: bool = field(
         default=False,
         metadata={
             "help": (
-                "Whether or not to allow for custom models defined on the Hub in their own modeling files. This option"
-                "should only be set to `True` for repositories you trust and in which you have read the code, as it will "
-                "execute code present on the Hub on your local machine."
+                "Will use the token generated when running `transformers-cli login` (necessary to use this script "
+                "with private models)."
             )
         },
     )
@@ -136,12 +119,12 @@ class DataTrainingArguments:
     validation_file: Optional[str] = field(
         default=None,
         metadata={
-            "help": "An optional input evaluation data file to evaluate the metrics (sacrebleu) on a jsonlines file."
+            "help": "An optional input evaluation data file to evaluate the metrics (sacreblue) on a jsonlines file."
         },
     )
     test_file: Optional[str] = field(
         default=None,
-        metadata={"help": "An optional input test data file to evaluate the metrics (sacrebleu) on a jsonlines file."},
+        metadata={"help": "An optional input test data file to evaluate the metrics (sacreblue) on a jsonlines file."},
     )
     overwrite_cache: bool = field(
         default=False, metadata={"help": "Overwrite the cached training and evaluation sets"}
@@ -173,7 +156,7 @@ class DataTrainingArguments:
         metadata={
             "help": (
                 "The maximum total sequence length for validation target text after tokenization. Sequences longer "
-                "than this will be truncated, sequences shorter will be padded. Will default to `max_target_length`. "
+                "than this will be truncated, sequences shorter will be padded. Will default to `max_target_length`."
                 "This argument is also used to override the ``max_length`` param of ``model.generate``, which is used "
                 "during ``evaluate`` and ``predict``."
             )
@@ -217,7 +200,7 @@ class DataTrainingArguments:
         },
     )
     num_beams: Optional[int] = field(
-        default=1,
+        default=None,
         metadata={
             "help": (
                 "Number of beams to use for evaluation. This argument will be passed to ``model.generate``, "
@@ -278,15 +261,6 @@ def main():
     else:
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
-    if model_args.use_auth_token is not None:
-        warnings.warn(
-            "The `use_auth_token` argument is deprecated and will be removed in v4.34. Please use `token` instead.",
-            FutureWarning,
-        )
-        if model_args.token is not None:
-            raise ValueError("`token` and `use_auth_token` are both specified. Please set only the argument `token`.")
-        model_args.token = model_args.use_auth_token
-
     # Sending telemetry. Tracking the example usage helps us better allocate resources to maintain them. The
     # information sent is the one passed as arguments along with your Python/PyTorch versions.
     send_example_telemetry("run_translation", model_args, data_args)
@@ -298,10 +272,6 @@ def main():
         handlers=[logging.StreamHandler(sys.stdout)],
     )
 
-    if training_args.should_log:
-        # The default of training_args.log_level is passive, so we set log level at info here to have that default.
-        transformers.utils.logging.set_verbosity_info()
-
     log_level = training_args.get_process_log_level()
     logger.setLevel(log_level)
     datasets.utils.logging.set_verbosity(log_level)
@@ -311,8 +281,8 @@ def main():
 
     # Log on each process the small summary:
     logger.warning(
-        f"Process rank: {training_args.local_rank}, device: {training_args.device}, n_gpu: {training_args.n_gpu}, "
-        + f"distributed training: {training_args.parallel_mode.value == 'distributed'}, 16-bits training: {training_args.fp16}"
+        f"Process rank: {training_args.local_rank}, device: {training_args.device}, n_gpu: {training_args.n_gpu}"
+        + f"distributed training: {bool(training_args.local_rank != -1)}, 16-bits training: {training_args.fp16}"
     )
     logger.info(f"Training/evaluation parameters {training_args}")
 
@@ -361,7 +331,7 @@ def main():
             data_args.dataset_name,
             data_args.dataset_config_name,
             cache_dir=model_args.cache_dir,
-            token=model_args.token,
+            use_auth_token=True if model_args.use_auth_token else None,
         )
     else:
         data_files = {}
@@ -374,18 +344,15 @@ def main():
         if data_args.test_file is not None:
             data_files["test"] = data_args.test_file
             extension = data_args.test_file.split(".")[-1]
-        if extension == "jsonl":
-            builder_name = "json"  # the "json" builder reads both .json and .jsonl files
-        else:
-            builder_name = extension  # e.g. "parquet"
+        # extension="json"
         raw_datasets = load_dataset(
-            builder_name,
+            extension,
             data_files=data_files,
             cache_dir=model_args.cache_dir,
-            token=model_args.token,
+            use_auth_token=True if model_args.use_auth_token else None,
         )
     # See more about loading any type of standard or custom dataset (from files, python dict, pandas DataFrame, etc) at
-    # https://huggingface.co/docs/datasets/loading.
+    # https://huggingface.co/docs/datasets/loading_datasets.html.
 
     # Load pretrained model and tokenizer
     #
@@ -396,16 +363,14 @@ def main():
         model_args.config_name if model_args.config_name else model_args.model_name_or_path,
         cache_dir=model_args.cache_dir,
         revision=model_args.model_revision,
-        token=model_args.token,
-        trust_remote_code=model_args.trust_remote_code,
+        use_auth_token=True if model_args.use_auth_token else None,
     )
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
         cache_dir=model_args.cache_dir,
         use_fast=model_args.use_fast_tokenizer,
         revision=model_args.model_revision,
-        token=model_args.token,
-        trust_remote_code=model_args.trust_remote_code,
+        use_auth_token=True if model_args.use_auth_token else None,
     )
     model = AutoModelForSeq2SeqLM.from_pretrained(
         model_args.model_name_or_path,
@@ -413,15 +378,10 @@ def main():
         config=config,
         cache_dir=model_args.cache_dir,
         revision=model_args.model_revision,
-        token=model_args.token,
-        trust_remote_code=model_args.trust_remote_code,
+        use_auth_token=True if model_args.use_auth_token else None,
     )
 
-    # We resize the embeddings only when necessary to avoid index errors. If you are creating a model from scratch
-    # on a small vocab and want a smaller embedding size, remove this test.
-    embedding_size = model.get_input_embeddings().weight.shape[0]
-    if len(tokenizer) > embedding_size:
-        model.resize_token_embeddings(len(tokenizer))
+    model.resize_token_embeddings(len(tokenizer))
 
     # Set decoder_start_token_id
     if model.config.decoder_start_token_id is None and isinstance(tokenizer, (MBartTokenizer, MBartTokenizerFast)):
@@ -475,7 +435,7 @@ def main():
 
     if training_args.label_smoothing_factor > 0 and not hasattr(model, "prepare_decoder_input_ids_from_labels"):
         logger.warning(
-            "label_smoothing is enabled but the `prepare_decoder_input_ids_from_labels` method is not defined for "
+            "label_smoothing is enabled but the `prepare_decoder_input_ids_from_labels` method is not defined for"
             f"`{model.__class__.__name__}`. This will lead to loss being calculated twice and will take up more memory"
         )
 
@@ -485,8 +445,9 @@ def main():
         inputs = [prefix + inp for inp in inputs]
         model_inputs = tokenizer(inputs, max_length=data_args.max_source_length, padding=padding, truncation=True)
 
-        # Tokenize targets with the `text_target` keyword argument
-        labels = tokenizer(text_target=targets, max_length=max_target_length, padding=padding, truncation=True)
+        # Setup the tokenizer for targets
+        with tokenizer.as_target_tokenizer():
+            labels = tokenizer(targets, max_length=max_target_length, padding=padding, truncation=True)
 
         # If we are padding here, replace all tokenizer.pad_token_id in the labels by -100 when we want to ignore
         # padding in the loss.
@@ -564,7 +525,7 @@ def main():
         )
 
     # Metric
-    metric = evaluate.load("sacrebleu")
+    metric = load_metric("sacrebleu")
 
     def postprocess_text(preds, labels):
         preds = [pred.strip() for pred in preds]
@@ -576,22 +537,31 @@ def main():
         preds, labels = eval_preds
         if isinstance(preds, tuple):
             preds = preds[0]
-        # Replace -100s used for padding as we can't decode them
-        preds = np.where(preds != -100, preds, tokenizer.pad_token_id)
         decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
-        labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
+        if data_args.ignore_pad_token_for_loss:
+            # Replace -100 in the labels as we can't decode them.
+            labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
         decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
 
         # Some simple post-processing
         decoded_preds, decoded_labels = postprocess_text(decoded_preds, decoded_labels)
-
+        # do_tokenize = 'ja-mecab' if target_lang=="ja_XX" else None
         result = metric.compute(predictions=decoded_preds, references=decoded_labels)
+        # result = metric.compute(predictions=decoded_preds, references=decoded_labels,tokenize=do_tokenize)
         result = {"bleu": result["score"]}
 
         prediction_lens = [np.count_nonzero(pred != tokenizer.pad_token_id) for pred in preds]
         result["gen_len"] = np.mean(prediction_lens)
         result = {k: round(v, 4) for k, v in result.items()}
         return result
+    
+    # checking sacrebleu
+    # print(metric.compute(predictions=["hello how are you", "hoge hoge"],references=[["Hi how are you", "hoge hoge"],["foo bar foo", "foo bar foobar"]]))
+    # {'score': 42.3240862445307, 'counts': [3, 2, 1, 0], 'totals': [6, 4, 2, 1], 'precisions': [50.0, 50.0, 50.0, 50.0], 'bp': 0.846481724890614, 'sys_len': 6, 'ref_len': 7}
+    # print(metric.compute(predictions=["猫がこたつで丸くなる", "こんにちは"],references=[["猫とこたつで丸くなる", "こんにちは"],["猫とこたつ", "ねこねこ"]]))
+    # {'score': 0.0, 'counts': [0, 0, 0, 0], 'totals': [2, 0, 0, 0], 'precisions': [0.0, 0.0, 0.0, 0.0], 'bp': 1.0, 'sys_len': 2, 'ref_len': 2}
+    # metric.compute(predictions=predictions, references=references,tokenize="ja-mecab")
+    # {'score': 44.81526019296195, 'counts': [5, 3, 2, 1], 'totals': [7, 5, 4, 3], 'precisions': [71.42857142857143, 60.0, 50.0, 33.333333333333336], 'bp': 0.8668778997501817, 'sys_len': 7, 'ref_len': 8}
 
     # Initialize our Trainer
     trainer = Seq2SeqTrainer(
@@ -659,10 +629,8 @@ def main():
 
         if trainer.is_world_process_zero():
             if training_args.predict_with_generate:
-                predictions = predict_results.predictions
-                predictions = np.where(predictions != -100, predictions, tokenizer.pad_token_id)
                 predictions = tokenizer.batch_decode(
-                    predictions, skip_special_tokens=True, clean_up_tokenization_spaces=True
+                    predict_results.predictions, skip_special_tokens=True, clean_up_tokenization_spaces=True
                 )
                 predictions = [pred.strip() for pred in predictions]
                 output_prediction_file = os.path.join(training_args.output_dir, "generated_predictions.txt")
