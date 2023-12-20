@@ -344,7 +344,7 @@ def main():
         if data_args.test_file is not None:
             data_files["test"] = data_args.test_file
             extension = data_args.test_file.split(".")[-1]
-        # extension="json"
+        if extension=="jsonl": extension="json" # load_dataset cannot load jsonl
         raw_datasets = load_dataset(
             extension,
             data_files=data_files,
@@ -545,9 +545,8 @@ def main():
 
         # Some simple post-processing
         decoded_preds, decoded_labels = postprocess_text(decoded_preds, decoded_labels)
-        # do_tokenize = 'ja-mecab' if target_lang=="ja_XX" else None
-        result = metric.compute(predictions=decoded_preds, references=decoded_labels)
-        # result = metric.compute(predictions=decoded_preds, references=decoded_labels,tokenize=do_tokenize)
+        do_tokenize = 'ja-mecab' if target_lang=="ja_XX" else None
+        result = metric.compute(predictions=decoded_preds, references=decoded_labels,tokenize=do_tokenize)
         result = {"bleu": result["score"]}
 
         prediction_lens = [np.count_nonzero(pred != tokenizer.pad_token_id) for pred in preds]
