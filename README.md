@@ -54,6 +54,4 @@ sh train_XX.sh　で実行
 - train_jaを回している時点でgpuメモリを13GBを食っている。CUDA out of memoryはこれが原因
     -   gpuが24GBあるものを選ぶ
 - 今までのプロジェクト（gitにあげていない方）はlightning_moduleをcpuに移す際にgpuやcpuメモリ不足エラーが出ていた
-    -   gpuメモリ不足で回していたが、直接の原因ではなさそう
-    -   gpuの容量が足りない→lightning moduleがgpuに載せてるものを無理にcpuに動かそうとする→エラー、の可能性がある？
-    -   エラーが出ていたのは毎回２つ目のエポック
+    -   gpuメモリ不足で回していたからでした。そちらをメインに動かします

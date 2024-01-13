@@ -26,6 +26,7 @@ from typing import Optional
 
 import datasets
 import numpy as np
+import evaluate
 from datasets import load_dataset, load_metric
 
 import transformers
@@ -48,6 +49,8 @@ from transformers import (
 from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version, send_example_telemetry
 from transformers.utils.versions import require_version
+
+from peft import LoraConfig, get_peft_model, TaskType, PeftConfig
 
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
@@ -98,7 +101,14 @@ class ModelArguments:
             )
         },
     )
-
+    enable_peft: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Whether to enable PEFT or not."},
+    )
+    peft_path: Optional[str] = field(
+        default=None,
+        metadata={"help": "Path to PEFT checkpoint."},
+    )
 
 @dataclass
 class DataTrainingArguments:
@@ -229,8 +239,8 @@ class DataTrainingArguments:
     )
 
     def __post_init__(self):
-        if self.dataset_name is None and self.train_file is None and self.validation_file is None:
-            raise ValueError("Need either a dataset name or a training/validation file.")
+        if self.dataset_name is None and self.train_file is None and self.validation_file is None and self.test_file is None:
+            raise ValueError("Need either a dataset name or a training/validation/test file.")
         elif self.source_lang is None or self.target_lang is None:
             raise ValueError("Need to specify the source language and the target language.")
 
@@ -260,7 +270,7 @@ def main():
         model_args, data_args, training_args = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
     else:
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
-
+    # print("training_args:",training_args) #num_train_epochsはtraining_argsで指定済み 3.0
     # Sending telemetry. Tracking the example usage helps us better allocate resources to maintain them. The
     # information sent is the one passed as arguments along with your Python/PyTorch versions.
     send_example_telemetry("run_translation", model_args, data_args)
@@ -380,8 +390,11 @@ def main():
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
     )
-
-    model.resize_token_embeddings(len(tokenizer))
+    # We resize the embeddings only when necessary to avoid index errors. If you are creating a model from scratch
+    # on a small vocab and want a smaller embedding size, remove this test.
+    embedding_size = model.get_input_embeddings().weight.shape[0]
+    if len(tokenizer) > embedding_size:
+        model.resize_token_embeddings(len(tokenizer))
 
     # Set decoder_start_token_id
     if model.config.decoder_start_token_id is None and isinstance(tokenizer, (MBartTokenizer, MBartTokenizerFast)):
@@ -392,6 +405,29 @@ def main():
 
     if model.config.decoder_start_token_id is None:
         raise ValueError("Make sure that `config.decoder_start_token_id` is correctly defined")
+    
+    # Enable PEFT
+    if model_args.enable_peft:
+        if training_args.do_train:
+            peft_config = LoraConfig(
+                r=4,
+                task_type=TaskType.SEQ_2_SEQ_LM,
+                # lora_alpha=32,
+                # lora_dropout=0.1,
+                target_modules=["q_proj", "v_proj"],
+                inference_mode=False,
+            )
+            model = get_peft_model(model, peft_config)
+            print("{peft_config.inference_mode=}")
+            model.print_trainable_parameters()
+            breakpoint()
+        elif training_args.do_predict:
+            peft_config = PeftConfig.from_pretrained(model_args.peft_path) # load from checkpoint
+            # peft_config.init_lora_weights = False
+            peft_config.inference_mode = True
+            model.add_adapter(peft_config)
+            model.enable_adapters()
+            breakpoint()
 
     prefix = data_args.source_prefix if data_args.source_prefix is not None else ""
 
@@ -424,6 +460,7 @@ def main():
             tokenizer.lang_code_to_id[data_args.forced_bos_token] if data_args.forced_bos_token is not None else None
         )
         model.config.forced_bos_token_id = forced_bos_token_id
+        assert forced_bos_token_id==250012, NotImplementedError("forced_bos_token_id must be 250012")
 
     # Get the language codes for input/target.
     source_lang = data_args.source_lang.split("_")[0]
@@ -525,7 +562,7 @@ def main():
         )
 
     # Metric
-    metric = load_metric("sacrebleu")
+    metric = evaluate.load("sacrebleu",cache_dir=model_args.cache_dir)
 
     def postprocess_text(preds, labels):
         preds = [pred.strip() for pred in preds]
@@ -537,18 +574,18 @@ def main():
         preds, labels = eval_preds
         if isinstance(preds, tuple):
             preds = preds[0]
+        # Replace -100s used for padding as we can't decode them
+        preds = np.where(preds != -100, preds, tokenizer.pad_token_id)
         decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
-        if data_args.ignore_pad_token_for_loss:
-            # Replace -100 in the labels as we can't decode them.
-            labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
+        labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
         decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
 
         # Some simple post-processing
         decoded_preds, decoded_labels = postprocess_text(decoded_preds, decoded_labels)
-        do_tokenize = 'ja-mecab' if target_lang=="ja_XX" else None
+        do_tokenize = 'ja-mecab'
         result = metric.compute(predictions=decoded_preds, references=decoded_labels,tokenize=do_tokenize)
         result = {"bleu": result["score"]}
-
+        
         prediction_lens = [np.count_nonzero(pred != tokenizer.pad_token_id) for pred in preds]
         result["gen_len"] = np.mean(prediction_lens)
         result = {k: round(v, 4) for k, v in result.items()}
@@ -611,11 +648,13 @@ def main():
         trainer.log_metrics("eval", metrics)
         trainer.save_metrics("eval", metrics)
 
+    # Prediction
     if training_args.do_predict:
         logger.info("*** Predict ***")
 
         predict_results = trainer.predict(
-            predict_dataset, metric_key_prefix="predict", max_length=max_length, num_beams=num_beams
+            predict_dataset, metric_key_prefix="predict", max_length=max_length, num_beams=num_beams,
+            forced_bos_token_id=model.config.forced_bos_token_id,
         )
         metrics = predict_results.metrics
         max_predict_samples = (
