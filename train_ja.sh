@@ -9,14 +9,16 @@ python run_translation.py \
     --target_lang ja_XX \
     --train_file /raid/ieda/trans_jaen_dataset/Dataset/data_sources/data_bt/json_style/train.jsonl\
     --validation_file /raid/ieda/trans_jaen_dataset/Dataset/data_sources/data_bt/json_style/val.jsonl\
-    --output_dir /raid/ieda/examples_result/rensyu2 \
+    --output_dir /raid/ieda/examples_result/rensyu3 \
+    --forced_bos_token ja_XX \
     --per_device_train_batch_size=16 \
     --per_device_eval_batch_size=16 \
     --overwrite_output_dir \
-    --num_train_epochs 2 \
+    --num_train_epochs 10 \
     --save_strategy epoch \
     --predict_with_generate \
-    --seed 42 #\
-    # --enable_peft
+    --evaluation_strategy steps \
+    --eval_steps 100 \
+    --seed 42 \
+    --enable_peft
 # for changing evaluation timing, --evaluation_strategy step and --eval_steps 1000 or like that
-# --seed 42

@@ -6,10 +6,11 @@ python run_translation.py \
     --do_predict \
     --source_lang en_XX \
     --target_lang ja_XX \
+    --forced_bos_token ja_XX \
     --test_file /raid/ieda/trans_jaen_dataset/Dataset/data_sources/data_bt/json_style/test.jsonl\
-    --output_dir /raid/ieda/examples_result/rensyu_result_secondtest \
+    --output_dir /raid/ieda/examples_result/rensyu3_result \
     --overwrite_output_dir \
     --predict_with_generate \
     --seed 42 \
     --enable_peft \
-    --peft_path /raid/ieda/examples_result/rensyu/checkpoint-209/
+    --peft_path /raid/ieda/examples_result/rensyu3/checkpoint-1050/

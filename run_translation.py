@@ -418,9 +418,9 @@ def main():
                 inference_mode=False,
             )
             model = get_peft_model(model, peft_config)
-            print("{peft_config.inference_mode=}")
+            print(f"{peft_config.inference_mode=}")
             model.print_trainable_parameters()
-            breakpoint()
+            # breakpoint()
         elif training_args.do_predict:
             peft_config = PeftConfig.from_pretrained(model_args.peft_path) # load from checkpoint
             # peft_config.init_lora_weights = False
@@ -460,7 +460,8 @@ def main():
             tokenizer.lang_code_to_id[data_args.forced_bos_token] if data_args.forced_bos_token is not None else None
         )
         model.config.forced_bos_token_id = forced_bos_token_id
-        assert forced_bos_token_id==250012, NotImplementedError("forced_bos_token_id must be 250012")
+        breakpoint()
+        # assert forced_bos_token_id==250012, NotImplementedError("forced_bos_token_id must be 250012")
 
     # Get the language codes for input/target.
     source_lang = data_args.source_lang.split("_")[0]

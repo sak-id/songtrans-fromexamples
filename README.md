@@ -28,10 +28,13 @@ sh train_XX.sh　で実行
     -   動作を確認しました
     -   MBartをtrain_ja.shでFinetuneしたものをテスト
 - test_peft.sh
-    -   実行すると、翻訳結果がいろんな言語になってしまう
+    -   動作を確認しました
+    -   MBartをtrain_ja.shでenable_peftしてFinetuneしたものをテスト
 
 ## 次にやること
-- test_peft.shの正常化
+- test_peft.shの正常化 Done!
+    -   出力が色々な言語になってしまっていた（アラビア語など）
+    -   force_bos_tokenをja_XXに指定したらできた
 
 
 ## ベースラインとして再現するべきもの
