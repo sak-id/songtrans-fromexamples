@@ -1,12 +1,6 @@
 # MBartによる英日歌詞翻訳
 https://github.com/huggingface/transformers/tree/main/examples/pytorch/translation
-~~よりコピーしたコードでリポジトリを作成しました。~~
-
-https://github.com/Sonata165/ControllableLyricTranslation/tree/main
-を元々利用する予定でしたが、謎のGPUやCPUのメモリが足りなくなる現象が解決できそうにない状況です。
-
-transformers/examples/pytorch/translationの内容を実行したところ上手くいきましたので、内容をこのリポジトリにコピーしました。そのためバージョンが一番最初のリンクの指す最新のものではなくなっています。
-
+よりコピーしたコードでリポジトリを作成しました。
 
 
 ## シェルプログラム一覧
@@ -29,12 +23,15 @@ sh train_XX.sh　で実行
         -   jsonlineファイルに変換済み
     -   sacrebleuをMeCabでtokenizeするよう変更
         -   日本語対応
-
+    -   enable_peftでLoRAが適用できる
+- test_ja.sh
+    -   動作を確認しました
+    -   MBartをtrain_ja.shでFinetuneしたものをテスト
+- test_peft.sh
+    -   実行すると、翻訳結果がいろんな言語になってしまう
 
 ## 次にやること
-- train_jaを実行した時のeval_bleuが0になっている
-    -   生成文の確認
-    -   データセットが正しく読めているか確認
+- test_peft.shの正常化
 
 
 ## ベースラインとして再現するべきもの
