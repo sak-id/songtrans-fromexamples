@@ -1,6 +1,6 @@
 #!usr/bin/env bash
 
-CUDA_VISIBLE_DEVICES=1 \
+CUDA_VISIBLE_DEVICES=0 \
 python run_translation.py \
     --model_name_or_path facebook/mbart-large-50-one-to-many-mmt \
     --do_train \
@@ -9,7 +9,7 @@ python run_translation.py \
     --target_lang ja_XX \
     --train_file /raid/ieda/trans_jaen_dataset/Dataset/datasets/data_parallel/train.jsonl\
     --validation_file /raid/ieda/trans_jaen_dataset/Dataset/datasets/data_parallel/val.jsonl\
-    --output_dir /raid/ieda/examples_result/mbart1 \
+    --output_dir /raid/ieda/examples_result/lora1 \
     --forced_bos_token ja_XX \
     --per_device_train_batch_size=16 \
     --per_device_eval_batch_size=16 \
@@ -20,4 +20,4 @@ python run_translation.py \
     --evaluation_strategy steps \
     --eval_steps 0.025 \
     --seed 42 \
-    # --enable_peft
+    --enable_peft

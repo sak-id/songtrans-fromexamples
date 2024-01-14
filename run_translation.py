@@ -456,6 +456,7 @@ def main():
 
         # For multilingual translation models like mBART-50 and M2M100 we need to force the target language token
         # as the first generated token. We ask the user to explicitly provide this as --forced_bos_token argument.
+        breakpoint()
         forced_bos_token_id = (
             tokenizer.lang_code_to_id[data_args.forced_bos_token] if data_args.forced_bos_token is not None else None
         )
