@@ -9,15 +9,16 @@ python run_translation.py \
     --target_lang ja_XX \
     --train_file /raid/ieda/trans_jaen_dataset/Dataset/datasets/data_parallel/train.jsonl\
     --validation_file /raid/ieda/trans_jaen_dataset/Dataset/datasets/data_parallel/val.jsonl\
-    --output_dir /raid/ieda/examples_result/lora1 \
+    --output_dir /raid/ieda/examples_result/lora4 \
     --forced_bos_token ja_XX \
     --per_device_train_batch_size=16 \
     --per_device_eval_batch_size=16 \
     --overwrite_output_dir \
-    --num_train_epochs 10 \
+    --num_train_epochs 8 \
     --save_strategy epoch \
     --predict_with_generate \
-    --evaluation_strategy steps \
-    --eval_steps 0.025 \
+    --evaluation_strategy epoch\
     --seed 42 \
+    --report_to tensorboard \
+    --logging_steps 50 \
     --enable_peft

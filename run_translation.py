@@ -45,8 +45,11 @@ from transformers import (
     Seq2SeqTrainingArguments,
     default_data_collator,
     set_seed,
+    TrainerState,
+    TrainerControl,
+    TrainerCallback,
 )
-from transformers.trainer_utils import get_last_checkpoint
+from transformers.trainer_utils import get_last_checkpoint, PREFIX_CHECKPOINT_DIR
 from transformers.utils import check_min_version, send_example_telemetry
 from transformers.utils.versions import require_version
 
@@ -257,6 +260,25 @@ class DataTrainingArguments:
         if self.val_max_target_length is None:
             self.val_max_target_length = self.max_target_length
 
+class SavePeftModelCallback(TrainerCallback):
+    def on_save(
+        self,
+        args: Seq2SeqTrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        **kwargs,
+    ):
+        checkpoint_folder = os.path.join(
+            args.output_dir, f"{PREFIX_CHECKPOINT_DIR}-{state.global_step}"
+        )       
+
+        peft_model_path = os.path.join(checkpoint_folder, "adapter_model")
+        kwargs["model"].save_pretrained(peft_model_path)
+
+        pytorch_model_path = os.path.join(checkpoint_folder, "pytorch_model.bin")
+        if os.path.exists(pytorch_model_path):
+            os.remove(pytorch_model_path)
+        return control
 
 def main():
     # See all possible arguments in src/transformers/training_args.py
@@ -456,13 +478,12 @@ def main():
 
         # For multilingual translation models like mBART-50 and M2M100 we need to force the target language token
         # as the first generated token. We ask the user to explicitly provide this as --forced_bos_token argument.
-        breakpoint()
         forced_bos_token_id = (
             tokenizer.lang_code_to_id[data_args.forced_bos_token] if data_args.forced_bos_token is not None else None
         )
-        model.config.forced_bos_token_id = forced_bos_token_id
-        breakpoint()
-        # assert forced_bos_token_id==250012, NotImplementedError("forced_bos_token_id must be 250012")
+        # model.config.forced_bos_token_id = forced_bos_token_id
+        model.generation_config.bos_token_id = forced_bos_token_id
+        assert forced_bos_token_id==250012, NotImplementedError("forced_bos_token_id must be 250012")
 
     # Get the language codes for input/target.
     source_lang = data_args.source_lang.split("_")[0]
@@ -610,7 +631,9 @@ def main():
         tokenizer=tokenizer,
         data_collator=data_collator,
         compute_metrics=compute_metrics if training_args.predict_with_generate else None,
+        # callbacks=[SavePeftModelCallback] if model_args.enable_peft else None,
     )
+    breakpoint()
 
     # Training
     if training_args.do_train:
@@ -620,7 +643,7 @@ def main():
         elif last_checkpoint is not None:
             checkpoint = last_checkpoint
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
-        trainer.save_model()  # Saves the tokenizer too for easy upload
+        # trainer.save_model()  # Saves the tokenizer too for easy upload
 
         metrics = train_result.metrics
         max_train_samples = (
@@ -630,7 +653,7 @@ def main():
 
         trainer.log_metrics("train", metrics)
         trainer.save_metrics("train", metrics)
-        trainer.save_state()
+        # trainer.save_state()
 
     # Evaluation
     results = {}
@@ -656,7 +679,7 @@ def main():
 
         predict_results = trainer.predict(
             predict_dataset, metric_key_prefix="predict", max_length=max_length, num_beams=num_beams,
-            forced_bos_token_id=model.config.forced_bos_token_id,
+            forced_bos_token_id=model.generation_config.bos_token_id,
         )
         metrics = predict_results.metrics
         max_predict_samples = (
@@ -689,12 +712,6 @@ def main():
     languages = [l for l in [data_args.source_lang, data_args.target_lang] if l is not None]
     if len(languages) > 0:
         kwargs["language"] = languages
-
-    if training_args.push_to_hub:
-        trainer.push_to_hub(**kwargs)
-    else:
-        trainer.create_model_card(**kwargs)
-
     return results
 
 

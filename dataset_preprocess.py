@@ -1,7 +1,12 @@
 import os
+import json
 parallel_path = '/raid/ieda/trans_jaen_dataset/Dataset/data_sources/data_parallel/parallel.jsonl'
 output_dir = '/raid/ieda/trans_jaen_dataset/Dataset/datasets/data_parallel'
 def main():
+    with open(parallel_path,'r') as f:
+        data = [json.load(l) for l in f.readlines()]
+    breakpoint()
+    exit()
     full_parallel = load_data(parallel_path)
     len_parallel = len(full_parallel)
     train_data = full_parallel[:int(len_parallel*0.8)]
