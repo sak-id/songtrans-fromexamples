@@ -23,6 +23,7 @@ import os
 import sys
 from dataclasses import dataclass, field
 from typing import Optional
+import time
 
 import datasets
 import numpy as np
@@ -53,7 +54,7 @@ from transformers.trainer_utils import get_last_checkpoint, PREFIX_CHECKPOINT_DI
 from transformers.utils import check_min_version, send_example_telemetry
 from transformers.utils.versions import require_version
 
-from peft import LoraConfig, get_peft_model, TaskType, PeftConfig
+from peft import LoraConfig, get_peft_model, TaskType, PeftConfig, PeftModel
 
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
@@ -260,26 +261,6 @@ class DataTrainingArguments:
         if self.val_max_target_length is None:
             self.val_max_target_length = self.max_target_length
 
-class SavePeftModelCallback(TrainerCallback):
-    def on_save(
-        self,
-        args: Seq2SeqTrainingArguments,
-        state: TrainerState,
-        control: TrainerControl,
-        **kwargs,
-    ):
-        checkpoint_folder = os.path.join(
-            args.output_dir, f"{PREFIX_CHECKPOINT_DIR}-{state.global_step}"
-        )       
-
-        peft_model_path = os.path.join(checkpoint_folder, "adapter_model")
-        kwargs["model"].save_pretrained(peft_model_path)
-
-        pytorch_model_path = os.path.join(checkpoint_folder, "pytorch_model.bin")
-        if os.path.exists(pytorch_model_path):
-            os.remove(pytorch_model_path)
-        return control
-
 def main():
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
@@ -444,11 +425,7 @@ def main():
             model.print_trainable_parameters()
             # breakpoint()
         elif training_args.do_predict:
-            peft_config = PeftConfig.from_pretrained(model_args.peft_path) # load from checkpoint
-            # peft_config.init_lora_weights = False
-            peft_config.inference_mode = True
-            model.add_adapter(peft_config)
-            model.enable_adapters()
+            model = PeftModel.from_pretrained(model, model_id=model_args.peft_path, is_training=False)
             breakpoint()
 
     prefix = data_args.source_prefix if data_args.source_prefix is not None else ""
@@ -631,9 +608,7 @@ def main():
         tokenizer=tokenizer,
         data_collator=data_collator,
         compute_metrics=compute_metrics if training_args.predict_with_generate else None,
-        # callbacks=[SavePeftModelCallback] if model_args.enable_peft else None,
     )
-    breakpoint()
 
     # Training
     if training_args.do_train:
@@ -653,7 +628,7 @@ def main():
 
         trainer.log_metrics("train", metrics)
         trainer.save_metrics("train", metrics)
-        # trainer.save_state()
+        trainer.save_state() # save trainer state eg loss, epoch, step
 
     # Evaluation
     results = {}
