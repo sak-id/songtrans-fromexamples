@@ -1,10 +1,11 @@
 #!usr/bin/env bash
 
-OUTPUT_DIR=mbart_parallel_only2
+MODEL_DIR=/raid/ieda/examples_result/mbart_bt_pre_finetuned/checkpoint-50676
+OUTPUT_DIR=mbart_parallel_after_bt
 
 CUDA_VISIBLE_DEVICES=0 \
 python run_translation.py \
-    --model_name_or_path facebook/mbart-large-50-one-to-many-mmt \
+    --model_name_or_path $MODEL_DIR \
     --do_train \
     --do_eval \
     --source_lang en_XX \
@@ -22,6 +23,5 @@ python run_translation.py \
     --evaluation_strategy epoch\
     --seed 42 \
     --report_to tensorboard \
-    --logging_steps 50 \
+    --logging_steps 54 \
     --logging_first_step
-    # --enable_peft

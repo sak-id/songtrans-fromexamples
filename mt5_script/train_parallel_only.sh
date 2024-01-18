@@ -1,10 +1,10 @@
 #!usr/bin/env bash
 
-OUTPUT_DIR=mbart_parallel_only2
+OUTPUT_DIR=mt5_parallel_only
 
-CUDA_VISIBLE_DEVICES=0 \
+CUDA_VISIBLE_DEVICES=1 \
 python run_translation.py \
-    --model_name_or_path facebook/mbart-large-50-one-to-many-mmt \
+    --model_name_or_path google/mt5-base \
     --do_train \
     --do_eval \
     --source_lang en_XX \
@@ -22,6 +22,6 @@ python run_translation.py \
     --evaluation_strategy epoch\
     --seed 42 \
     --report_to tensorboard \
-    --logging_steps 50 \
-    --logging_first_step
+    --logging_steps 54 \
+    --logging_first_step True
     # --enable_peft
