@@ -412,14 +412,23 @@ def main():
     # Enable PEFT
     if model_args.enable_peft:
         if training_args.do_train:
-            peft_config = LoraConfig(
-                r=4,
-                task_type=TaskType.SEQ_2_SEQ_LM,
-                # lora_alpha=32,
-                # lora_dropout=0.1,
-                target_modules=["q_proj", "v_proj"],
-                inference_mode=False,
-            )
+            # モデルによりtarget_modulesを変える
+            if "mbart" in model_args.model_name_or_path:
+                peft_config = LoraConfig(
+                    r=4,
+                    task_type=TaskType.SEQ_2_SEQ_LM,
+                    target_modules=["q_proj", "v_proj"],
+                    inference_mode=False,
+                )
+            elif "mt5" in model_args.model_name_or_path:
+                peft_config = LoraConfig(
+                    r=4,
+                    task_type=TaskType.SEQ_2_SEQ_LM,
+                    target_modules=["q", "v"],
+                    inference_mode=False,
+                )
+            else:
+                raise NotImplementedError("model not implemented for peft")
             model = get_peft_model(model, peft_config)
             print(f"{peft_config.inference_mode=}")
             model.print_trainable_parameters()
@@ -660,7 +669,7 @@ def main():
             data_args.max_predict_samples if data_args.max_predict_samples is not None else len(predict_dataset)
         )
         metrics["predict_samples"] = min(max_predict_samples, len(predict_dataset))
-        breakpoint()
+        
         trainer.log_metrics("predict", metrics)
         trainer.save_metrics("predict", metrics)
 

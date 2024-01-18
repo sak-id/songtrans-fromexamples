@@ -12,7 +12,7 @@
 | mBART | True |No | parallel | train_peft_parallel_only.sh | raid mbart_lora_parallel_only ||
 | mBART | True | bt_pre | parallel | train_parallel_after_bt.sh | raid mbart_parallel_after_bt | 予想通り過学習 |
 | mBART | True | bt_pre | parallel | train_peft_parallel_after_bt.sh | |まだ|
-| mT5 | False | No | parallel | train_parallel_only.sh | mt5_parallel_only |testまだ|
+| mT5 | False | No | parallel | train_parallel_only.sh | mt5_parallel_only |test中にエラー|
 
 
 
