@@ -1,7 +1,7 @@
 #!usr/bin/env bash
 
-CHECKPOINT=1080
-MODEL_DIR=mt5_parallel_only
+CHECKPOINT=1080 #972
+MODEL_DIR=mbart_parallel_only2
 
 CUDA_VISIBLE_DEVICES=1 \
 python run_translation.py \

@@ -2,7 +2,7 @@
 
 OUTPUT_DIR=mbart_parallel_only2
 
-CUDA_VISIBLE_DEVICES=0 \
+CUDA_VISIBLE_DEVICES=1 \
 python run_translation.py \
     --model_name_or_path facebook/mbart-large-50-one-to-many-mmt \
     --do_train \
@@ -22,6 +22,6 @@ python run_translation.py \
     --evaluation_strategy epoch\
     --seed 42 \
     --report_to tensorboard \
-    --logging_steps 50 \
+    --logging_steps 54 \
     --logging_first_step
     # --enable_peft
