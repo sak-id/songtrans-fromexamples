@@ -1,8 +1,8 @@
 #!usr/bin/env bash
 
 PRETRAINED_MODEL_DIR=/raid/ieda/examples_result/mbart_bt_pre_finetuned/checkpoint-50676
-CHECKPOINT=864
-MODEL_DIR=mbart_peft_parallel_after_bt
+CHECKPOINT=1188 # 1620
+MODEL_DIR=mbart_peft_parallel_after_bt_r16_alpha16
 
 CUDA_VISIBLE_DEVICES=1 \
 python run_translation.py \
@@ -11,7 +11,7 @@ python run_translation.py \
     --source_lang en_XX \
     --target_lang ja_XX \
     --forced_bos_token ja_XX \
-    --test_file /raid/ieda/trans_jaen_dataset/Dataset/datasets/data_parallel/test.jsonl\
+    --test_file /raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel/test.jsonl\
     --output_dir /raid/ieda/examples_result/${MODEL_DIR}/result-${CHECKPOINT} \
     --overwrite_output_dir \
     --predict_with_generate \

@@ -9,8 +9,8 @@ python run_translation.py \
     --do_eval \
     --source_lang en_XX \
     --target_lang ja_XX \
-    --train_file /raid/ieda/trans_jaen_dataset/Dataset/datasets/data_parallel/train.jsonl\
-    --validation_file /raid/ieda/trans_jaen_dataset/Dataset/datasets/data_parallel/val.jsonl\
+    --train_file /raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel/train.jsonl\
+    --validation_file /raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel/val.jsonl\
     --output_dir /raid/ieda/examples_result/${OUTPUT_DIR} \
     --forced_bos_token ja_XX \
     --per_device_train_batch_size=16 \

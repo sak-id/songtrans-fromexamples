@@ -1,6 +1,6 @@
 #!usr/bin/env bash
 
-OUTPUT_DIR=mbart_parallel_only2
+OUTPUT_DIR=mbart_parallel_only
 
 CUDA_VISIBLE_DEVICES=1 \
 python run_translation.py \

@@ -1,6 +1,6 @@
 #!usr/bin/env bash
 
-CHECKPOINT=648
+CHECKPOINT=1080 #1080
 MODEL_DIR=mbart_peft_parallel_only
 
 CUDA_VISIBLE_DEVICES=1 \
@@ -10,7 +10,7 @@ python run_translation.py \
     --source_lang en_XX \
     --target_lang ja_XX \
     --forced_bos_token ja_XX \
-    --test_file /raid/ieda/trans_jaen_dataset/Dataset/datasets/data_parallel/test.jsonl\
+    --test_file /raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel/test.jsonl\
     --output_dir /raid/ieda/examples_result/${MODEL_DIR}/result-${CHECKPOINT} \
     --overwrite_output_dir \
     --predict_with_generate \

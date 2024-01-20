@@ -1,9 +1,9 @@
 #!usr/bin/env bash
 
-MODEL_DIR=/raid/ieda/examples_result/mbart_bt_pre_finetuned/checkpoint-50676
-OUTPUT_DIR=mbart_parallel_after_bt3
+MODEL_DIR=/raid/ieda/examples_result/mt5_bt_pre_finetuned/checkpoint-253380
+OUTPUT_DIR=mt5_peft_parallel_after_bt
 
-CUDA_VISIBLE_DEVICES=0 \
+CUDA_VISIBLE_DEVICES=1 \
 python run_translation.py \
     --model_name_or_path $MODEL_DIR \
     --do_train \
@@ -17,11 +17,12 @@ python run_translation.py \
     --per_device_train_batch_size=16 \
     --per_device_eval_batch_size=16 \
     --overwrite_output_dir \
-    --num_train_epochs 10 \
+    --num_train_epochs 20 \
     --save_strategy epoch \
     --predict_with_generate \
     --evaluation_strategy epoch\
     --seed 42 \
     --report_to tensorboard \
     --logging_steps 54 \
-    --logging_first_step
+    --logging_first_step \
+    --enable_peft
