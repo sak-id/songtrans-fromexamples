@@ -2,12 +2,14 @@
 # added_metrics.txt is the total results file
 # added_generated_predictions.txt has four lines per prediction: the score, the source, the reference, and the prediction
 
+# TERがpython3.11で動かないので、3.9(conda env: lyric_ja2)で実行している
+
 import os
-# import pyter
+import pyter
 import sacrebleu
 import evaluate
 import json
-# import spacy
+import spacy
 
 cache_dir="/raid/ieda/dataset_cache"
 
@@ -33,7 +35,6 @@ def main():
     with open(os.path.join(OUTPUT_DIR, "generated_predictions.txt"), "r") as f:
         output_text = [line.strip() for line in f.readlines()]
     print("output_text:", output_text[0:3])
-    breakpoint()
 
     result_scores = compute_scores(reference_texts, output_text, CONSTRAINT_PATH)
     generate_result_comparison_file(source_texts, output_text, reference_texts, result_scores)
@@ -43,15 +44,6 @@ def compute_scores(reference_texts, output_texts, constraint_path):
     Compute metrics values for output text (given reference text).
     Reference text is optional.
     """
-
-    # with open(output_path) as f:
-    #     outputs = [x.rstrip() for x in f.readlines()]
-    # if args.reference_path != None:
-    #     with open(args.reference_path) as f:
-    #         references = [x.rstrip() for x in f.readlines()]
-    # else:
-    #     references = None
-
     output_lns = output_texts
     reference_lns = reference_texts
     if os.path.exists(constraint_path):
@@ -74,20 +66,23 @@ def compute_scores(reference_texts, output_texts, constraint_path):
     #     tgt_lens.append(t1)
     #     tgt_rhymes.append(t2)
     tgt_lens = constraint_lns
-    breakpoint()
 
     # Compute format accuracy
     # out_lens = [len(i.strip()) for i in output_lns] #要変更
-    """
+    print("start count_syllable_sentence_batch")
     out_lens = SyllableCounterJA.count_syllable_sentence_batch(output_lns)
-    len_acc = calculate_acc(out=out_lens, tgt=tgt_lens)
-    scores['length_accuracy'] = len_acc
-    """
+    print("end count_syllable_sentence_batch")
+    print("out_lens:", out_lens[0:3])
+    breakpoint()
+    # constraint_pathを追加したら下2行をコメントアウト外す
+    # len_acc = calculate_acc(out=out_lens, tgt=tgt_lens)
+    # scores['length_accuracy'] = len_acc
+    # L1/2 distance も追加したい
 
     # Compute Translate Edit Rate (TER)
-    # ters = [pyter.ter(out, ref) for out, ref in zip(output_lns, reference_lns)]
-    # ter = sum(ters) / len(ters)
-    # scores['TER'] = ter
+    ters = [pyter.ter(out, ref) for out, ref in zip(output_lns, reference_lns)]
+    ter = sum(ters) / len(ters)
+    scores['TER'] = ter
 
     # Save result
     with open(os.path.join(OUTPUT_DIR, "added_metrics.txt"), 'w', encoding='utf8') as f:
@@ -96,9 +91,10 @@ def compute_scores(reference_texts, output_texts, constraint_path):
     # Metric for result comparison file
     bleus = calculate_sentence_bleu(output_lns, reference_lns)  # Sentence-level BLEU
     scores = {'bleu': ['{:.4f}'.format(i) for i in bleus]}
-    """ch_count = ['{} / {}'.format(i, j) for i, j in zip(out_lens, tgt_lens)]
-    scores['len'] = ch_count"""
-    # generate_result_comparison_file(args.source_path, args.output_path, args.reference_path, scores=scores)
+    # ch_count = ['{} / {}'.format(i, j) for i, j in zip(out_lens, tgt_lens)]
+    # constraint_pathを追加したら下1行をコメントアウト
+    ch_count = ['{} / 0'.format(i) for i in zip(out_lens)]
+    scores['len'] = ch_count
 
     return scores
 
@@ -143,8 +139,7 @@ def calculate_sacrebleu(out, ref, ja_tokenize=True):
 
 # For Japanese
 class SyllableCounterJA:
-    # nlp = spacy.load('ja_ginza')
-    nlp = None
+    nlp = spacy.load('ja_ginza')
     @classmethod
     def count_syllable_sentence(cls, sentence, test=False, return_list=False):
         small_word = ["ャ","ュ","ョ","ァ","ィ","ゥ","ェ","ォ"]
@@ -166,13 +161,6 @@ class SyllableCounterJA:
                     if not ch in small_word:
                         num_syllables += 1
                 word_syllables.append(num_syllables)
-            
-            # for sent in doc.sents:
-            #     for token in sent:
-            #         if token.pos_ == 'PUNCT':
-            #             continue
-            #         for item in token.morph.get("Reading"):
-            #             word_syllables.append(len(item))
 
             if return_list == True:  # return results in a list of integers
                 ret_t = word_syllables
