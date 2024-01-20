@@ -17,10 +17,11 @@ cache_dir="/raid/ieda/dataset_cache"
 DATASET_TYPE = "val" # "val" or "test"
 MODEL_DIR = "mt5_bt_pre_finetuned"
 CHECKPOINT=253380
+SYLLABLE_TYPE = "target" # "target" or "source
 
 OUTPUT_DIR = "/raid/ieda/examples_result/" + MODEL_DIR + "/result-" + str(CHECKPOINT)
 DATASET_FILE = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel/{}.jsonl".format(DATASET_TYPE)
-CONSTRAINT_PATH = "" # 実装する
+CONSTRAINT_PATH = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel/constraints/{}_len.{}".format(DATASET_TYPE, SYLLABLE_TYPE)
 
 def main():
     print("DATASET_FILE:", DATASET_FILE)
@@ -38,7 +39,7 @@ def main():
 
     result_scores = compute_scores(reference_texts, output_text, CONSTRAINT_PATH)
     generate_result_comparison_file(source_texts, output_text, reference_texts, result_scores)
-    pass
+
 def compute_scores(reference_texts, output_texts, constraint_path):
     """
     Compute metrics values for output text (given reference text).
@@ -59,25 +60,21 @@ def compute_scores(reference_texts, output_texts, constraint_path):
     scores: dict = calculate_sacrebleu(output_lns, reference_lns)
 
     # Read constraint target
-    # tgt_rhymesを除く tgt_lensは英語のものであることに注意
-    # tgt_lens, tgt_rhymes = [], []
-    # for l in constraint_lns:
-    #     t1, t2 = [int(i) for i in l.split('\t')]
-    #     tgt_lens.append(t1)
-    #     tgt_rhymes.append(t2)
-    tgt_lens = constraint_lns
+    tgt_lens = [int(i) for i in constraint_lns]
 
     # Compute format accuracy
-    # out_lens = [len(i.strip()) for i in output_lns] #要変更
     print("start count_syllable_sentence_batch")
     out_lens = SyllableCounterJA.count_syllable_sentence_batch(output_lns)
     print("end count_syllable_sentence_batch")
     print("out_lens:", out_lens[0:3])
+
+    len_acc, len_diff = calculate_acc(out=out_lens, tgt=tgt_lens)
     breakpoint()
-    # constraint_pathを追加したら下2行をコメントアウト外す
-    # len_acc = calculate_acc(out=out_lens, tgt=tgt_lens)
-    # scores['length_accuracy'] = len_acc
-    # L1/2 distance も追加したい
+    # 音韻数の正解率
+    scores['length_accuracy {}'.format(SYLLABLE_TYPE)] = len_acc
+    # 音韻数の平均誤差
+    scores['length_difference {}'.format(SYLLABLE_TYPE)] = len_diff
+    
 
     # Compute Translate Edit Rate (TER)
     ters = [pyter.ter(out, ref) for out, ref in zip(output_lns, reference_lns)]
@@ -85,15 +82,13 @@ def compute_scores(reference_texts, output_texts, constraint_path):
     scores['TER'] = ter
 
     # Save result
-    with open(os.path.join(OUTPUT_DIR, "added_metrics.txt"), 'w', encoding='utf8') as f:
+    with open(os.path.join(OUTPUT_DIR, "{}_metrics.txt".format(SYLLABLE_TYPE)), 'w', encoding='utf8') as f:
         f.write(json.dumps(scores, indent=4, ensure_ascii=False))
 
     # Metric for result comparison file
     bleus = calculate_sentence_bleu(output_lns, reference_lns)  # Sentence-level BLEU
     scores = {'bleu': ['{:.4f}'.format(i) for i in bleus]}
-    # ch_count = ['{} / {}'.format(i, j) for i, j in zip(out_lens, tgt_lens)]
-    # constraint_pathを追加したら下1行をコメントアウト
-    ch_count = ['{} / 0'.format(i) for i in zip(out_lens)]
+    ch_count = ['{} / {}'.format(i, j) for i, j in zip(out_lens, tgt_lens)]
     scores['len'] = ch_count
 
     return scores
@@ -110,6 +105,8 @@ def generate_result_comparison_file(srcs, outputs, refs, scores):
 
     # Construct file content
     ret = '----------------------------------------\n'
+    ret += '{}\n'.format(SYLLABLE_TYPE)
+    ret += '----------------------------------------\n'
     for i in range(len(outputs)):
         ret += 'Sentence {}'.format(i + 1)
         for k in scores:
@@ -123,7 +120,7 @@ def generate_result_comparison_file(srcs, outputs, refs, scores):
                'out: {}\n' \
                '----------------------------------------\n'.format(src_s, ref_s, out_s)
 
-    with open(os.path.join(OUTPUT_DIR, "added_generated_predictions.txt"), 'w') as f:
+    with open(os.path.join(OUTPUT_DIR, "{}_generated_predictions.txt".format(SYLLABLE_TYPE)), 'w') as f:
         f.write(ret)
 
 
@@ -144,10 +141,6 @@ class SyllableCounterJA:
     def count_syllable_sentence(cls, sentence, test=False, return_list=False):
         small_word = ["ャ","ュ","ョ","ァ","ィ","ゥ","ェ","ォ"]
         try:
-            # words = nltk.word_tokenize(sentence) # word毎に区切る
-            # word_syllables = [cls.count_syllable_word(word.lower().strip()) for word in words]
-            # # print(word_syllables)
-
             doc = cls.nlp(sentence)
             word_syllables = []
             for token in doc:
@@ -198,19 +191,19 @@ def calculate_sentence_bleu(out, ref):
     return ret
 
 
-def calculate_acc(out, tgt, unconstrained_token=None):
+def calculate_acc(out, tgt):
     '''
-    Calculate the ratio of same elements
+    Calculate the ratio of same elements / average of difference in lengths
     '''
     assert len(out) == len(tgt)
     cnt_same = 0
+    cnt_diff = 0
     for i in range(len(out)):
         if out[i] == tgt[i]:
             cnt_same += 1
-        elif unconstrained_token != None:
-            if tgt[i] == unconstrained_token:
-                cnt_same += 1
-    return cnt_same / len(out)
+        else:
+            cnt_diff += abs(out[i] - tgt[i])
+    return cnt_same / len(out), cnt_diff / len(out)
 
 if __name__ == "__main__":
     main()
