@@ -2,14 +2,13 @@
 # added_metrics.txt is the total results file
 # added_generated_predictions.txt has four lines per prediction: the score, the source, the reference, and the prediction
 
-# TERがpython3.11で動かないので、3.9(conda env: lyric_ja2)で実行している
-
 import os
-import pyter
+# import pyter
 import sacrebleu
 import evaluate
 import json
 import spacy
+from transformers import AutoTokenizer
 
 cache_dir="/raid/ieda/dataset_cache"
 
@@ -20,7 +19,7 @@ CHECKPOINT=50676
 SYLLABLE_TYPE = "target" # "target" or "source
 SAVE_FILES_NAME = "samesyllable" # "val" or "test" or "samesyllable"
 # For backtranslation model
-bt_pre_prefix = "samesyllable" # test or samesyllable or val
+bt_pre_prefix = "test" # test or samesyllable or val
 
 # you don't need to change these
 if "result" in MODEL_DIR: # for not trained model
@@ -29,12 +28,11 @@ elif "bt_pre" in MODEL_DIR: # for backtranslation model, 比較に使うモデ�
     OUTPUT_DIR = "/raid/ieda/examples_result/" + MODEL_DIR + "/" + bt_pre_prefix + "result-" + str(CHECKPOINT)
 else:
     OUTPUT_DIR = "/raid/ieda/examples_result/" + MODEL_DIR + "/result-" + str(CHECKPOINT)
-if SAVE_FILES_NAME == "samesyllable": # change directory if using samesyllable dataset
-    DATASET_FILE = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel_samesyllable/{}.jsonl".format(DATASET_TYPE)
-    CONSTRAINT_PATH = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel_samesyllable/constraints/{}_len.{}".format(DATASET_TYPE, SYLLABLE_TYPE)
-else:
-    DATASET_FILE = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel/{}.jsonl".format(DATASET_TYPE)
-    CONSTRAINT_PATH = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel/constraints/{}_len.{}".format(DATASET_TYPE, SYLLABLE_TYPE)
+# if SAVE_FILES_NAME == "samesyllable": # change directory if using samesyllable dataset
+#     DATASET_FILE = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel_samesyllable/{}.jsonl".format(DATASET_TYPE)
+#     CONSTRAINT_PATH = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel_samesyllable/constraints/{}_len.{}".format(DATASET_TYPE, SYLLABLE_TYPE)
+DATASET_FILE = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel/{}.jsonl".format(DATASET_TYPE)
+CONSTRAINT_PATH = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel/constraints/{}_len.{}".format(DATASET_TYPE, SYLLABLE_TYPE)
 
 def main():
     print("DATASET_FILE:", DATASET_FILE)
@@ -87,14 +85,16 @@ def compute_scores(reference_texts, output_texts, constraint_path):
     scores['length_accuracy {}'.format(SYLLABLE_TYPE)] = len_acc
     # 音韻数の平均誤差
     scores['length_difference {}'.format(SYLLABLE_TYPE)] = len_diff
-    
+    # 音韻数誤差の分散
+    # len_var = calculate_variance(out_lens, tgt_lens)
+    # scores['length_variance {}'.format(SYLLABLE_TYPE)] = len_var
 
     # Compute Translate Edit Rate (TER)
-    ters = [pyter.ter(out, ref) for out, ref in zip(output_lns, reference_lns)]
-    ter = sum(ters) / len(ters)
+    ter = calculate_ter(output_lns, reference_lns)
     scores['TER'] = ter
 
     # Compute ROUGE
+    # rougeはまだ正しく動かない
     # rouge = calculate_rouge(output_lns, reference_lns)
     # scores.update(rouge)
 
@@ -158,14 +158,25 @@ def calculate_sacrebleu(out, ref, ja_tokenize=True):
     return ret
 
 def calculate_rouge(out, ref):
+    # 現状rouge1が全て0.5, rouge2が全て0.0になっている
+    # rougeLはRougeScorer._lcs_tableでエラーが出ている
     metric = evaluate.load("rouge",cache_dir=cache_dir)
     # Turn use_aggregator off to get per-sentence scores
-    result = metric.compute(predictions=out, references=ref, rouge_types=["rouge1","rouge2","rougeL"])
-    #tokneizer=
-    ret = {'rouge1': round(result['rouge1'].mid.fmeasure, 4),
-           'rouge2': round(result['rouge2'].mid.fmeasure, 4),
-           'rougeL': round(result['rougeL'].mid.fmeasure, 4)}
+    # run_translation.pyでつかているMBartは入力が英語で固定のため使えない
+    mytokenizer = AutoTokenizer.from_pretrained("ku-nlp/bart-large-japanese", cache_dir=cache_dir)
+    result = metric.compute(predictions=out, references=ref, rouge_types=["rouge1","rouge2"],tokenizer=mytokenizer)
+    ret = {
+        'rouge1': round(result['rouge1'], 4),
+        'rouge2': round(result['rouge2'], 4),
+        # 'rougeL': round(result['rougeL'], 4)
+    }
     return ret
+
+def calculate_ter(out, ref):
+    ter = evaluate.load("ter",cache_dir=cache_dir)
+    result = ter.compute(predictions=out, references=ref,normalized=True,support_zh_ja_chars=True)
+    return result["score"] / 100
+
 
 def calculate_bertscore(out, ref):
     metric = evaluate.load("bertscore",cache_dir=cache_dir)
@@ -173,7 +184,6 @@ def calculate_bertscore(out, ref):
     precision = sum(result['precision']) / len(result['precision'])
     recall = sum(result['recall']) / len(result['recall'])
     f1 = 1/((1/precision + 1/recall)/2)
-    breakpoint()
     ret = {
         'bertscore precision': round(precision, 4),
         'bertscore recall': round(recall, 4),
@@ -251,6 +261,11 @@ def calculate_acc(out, tgt):
         else:
             cnt_diff += abs(out[i] - tgt[i])
     return cnt_same / len(out), cnt_diff / len(out)
+
+def calculate_variance(out,tgt):
+    mora_diff = [abs(i-j) for i,j in zip(out,tgt)]
+    raise NotImplementedError
+
 
 if __name__ == "__main__":
     main()
