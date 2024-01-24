@@ -1,8 +1,5 @@
-# create len file acording to src and tgt file (val/test datasets)
-# for calculate length accuracy in add_metrics_to_results.py
-# conda activate lyric_ja2 (python3.9)
-
-# English Syllable Counter is from Singable-Translation
+# Description: This file is used to create a dataset of words that have the same number of syllables
+# For parallel data
 
 import os
 import json
@@ -10,41 +7,65 @@ import spacy
 import nltk
 import cmudict
 
-DATASET_TYPE = "test" # "val" or "test"
-
-DATASET_FILE = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel_samesyllable/{}.jsonl".format(DATASET_TYPE)
-OUTPUT_FILE = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel_samesyllable/constraints/"
+INPUT_DIR = "/raid/ieda/trans_jaen_dataset/Data/source_data/data_parallel/"
+OUTPUT_DIR = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel_samesyllable/"
 
 def main():
-    print("DATASET_FILE:", DATASET_FILE)
-    # read val/test dataset
-    with open(DATASET_FILE, "r") as f:
-        jsonl_data = [json.loads(line) for line in f.readlines()]
-    source_texts = [data['translation']['en'] for data in jsonl_data] # en
-    reference_texts = [data['translation']['ja'] for data in jsonl_data] # ja
-    print("reference_texts:", reference_texts[0:3])
-
+    with open(os.path.join(INPUT_DIR, "shuffled_full.source"), "r") as f:
+        source_texts = f.readlines()
+    with open(os.path.join(INPUT_DIR, "shuffled_full.target"), "r") as f:
+        target_texts = f.readlines()
+    assert len(source_texts) == len(target_texts)
+    print("len(source_texts):", len(source_texts))
+    
     # count syllables in english:
     en_lens = SyllableCounter.count_syllable_sentence_batch(source_texts)
     print("en_lens:", en_lens[0:3])
     print("len(en_lens):", len(en_lens))
-
     # count syllables in japanese:
-    ja_lens = SyllableCounterJA.count_syllable_sentence_batch(reference_texts)
+    ja_lens = SyllableCounterJA.count_syllable_sentence_batch(target_texts)
     print("ja_lens:", ja_lens[0:3])
     print("len(ja_lens):", len(ja_lens))
 
+    en_dataset = [] # list of sentences with the same number of syllables
+    ja_dataset = []
+    for i in range(len(source_texts)):
+        if en_lens[i] == ja_lens[i]:
+            en_dataset.append(source_texts[i])
+            ja_dataset.append(target_texts[i])
+    print("len(en_dataset):", len(en_dataset))
     breakpoint()
-    if not os.path.exists(OUTPUT_FILE):
-        os.makedirs(OUTPUT_FILE)
-    # write to file
-    with open(os.path.join(OUTPUT_FILE, DATASET_TYPE + "_len.source"), "w") as f:
-        for i in en_lens:
-            f.write(str(i) + "\n")
-    with open(os.path.join(OUTPUT_FILE, DATASET_TYPE + "_len.target"), "w") as f:
-        for i in ja_lens:
-            f.write(str(i) + "\n")
-    pass
+    with open(os.path.join(OUTPUT_DIR, "full.jsonl"), "w") as f:
+        for en_text,ja_text in zip(en_dataset,ja_dataset):
+            f.write(json.dumps({"translation": {"en":en_text.strip("\n"),"ja":ja_text.strip("\n").strip("　")}},ensure_ascii=False))
+            f.write("\n")
+
+    len_source = len(en_dataset)
+    len_target = len(ja_dataset)
+    assert len_source == len_target
+    train_source = en_dataset[:int(len_source*0.8)]
+    train_target = ja_dataset[:int(len_target*0.8)]
+    val_source = en_dataset[int(len_source*0.8):int(len_source*0.9)]
+    val_target = ja_dataset[int(len_target*0.8):int(len_target*0.9)]
+    test_source = en_dataset[int(len_source*0.9):]
+    test_target = ja_dataset[int(len_target*0.9):]
+    print(f"train: {len(train_source)} lines")
+    print(f"val: {len(val_source)} lines")
+    print(f"test: {len(test_source)} lines")
+    breakpoint()
+    with open(os.path.join(OUTPUT_DIR, "train.jsonl"), "w") as f:
+        for en_text,ja_text in zip(train_source,train_target):
+            f.write(json.dumps({"translation": {"en":en_text.strip("\n"),"ja":ja_text.strip("\n").strip("　")}},ensure_ascii=False))
+            f.write("\n")
+    with open(os.path.join(OUTPUT_DIR, "val.jsonl"), "w") as f:
+        for en_text,ja_text in zip(val_source,val_target):
+            f.write(json.dumps({"translation": {"en":en_text.strip("\n"),"ja":ja_text.strip("\n").strip("　")}},ensure_ascii=False))
+            f.write("\n")
+    with open(os.path.join(OUTPUT_DIR, "test.jsonl"), "w") as f:
+        for en_text,ja_text in zip(test_source,test_target):
+            f.write(json.dumps({"translation": {"en":en_text.strip("\n"),"ja":ja_text.strip("\n").strip("　")}},ensure_ascii=False))
+            f.write("\n")
+
 
 # For English
 class SyllableCounter:

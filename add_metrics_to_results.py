@@ -14,14 +14,27 @@ import spacy
 cache_dir="/raid/ieda/dataset_cache"
 
 # specify dataset/file files
-DATASET_TYPE = "val" # "val" or "test"
-MODEL_DIR = "mt5_bt_pre_finetuned"
-CHECKPOINT=253380
+DATASET_TYPE = "test" # "val" or "test"
+MODEL_DIR = "mbart_bt_pre_finetuned"
+CHECKPOINT=50676
 SYLLABLE_TYPE = "target" # "target" or "source
+SAVE_FILES_NAME = "samesyllable" # "val" or "test" or "samesyllable"
+# For backtranslation model
+bt_pre_prefix = "samesyllable" # test or samesyllable or val
 
-OUTPUT_DIR = "/raid/ieda/examples_result/" + MODEL_DIR + "/result-" + str(CHECKPOINT)
-DATASET_FILE = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel/{}.jsonl".format(DATASET_TYPE)
-CONSTRAINT_PATH = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel/constraints/{}_len.{}".format(DATASET_TYPE, SYLLABLE_TYPE)
+# you don't need to change these
+if "result" in MODEL_DIR: # for not trained model
+    OUTPUT_DIR = "/raid/ieda/examples_result/" + MODEL_DIR
+elif "bt_pre" in MODEL_DIR: # for backtranslation model, 比較に使うモデル
+    OUTPUT_DIR = "/raid/ieda/examples_result/" + MODEL_DIR + "/" + bt_pre_prefix + "result-" + str(CHECKPOINT)
+else:
+    OUTPUT_DIR = "/raid/ieda/examples_result/" + MODEL_DIR + "/result-" + str(CHECKPOINT)
+if SAVE_FILES_NAME == "samesyllable": # change directory if using samesyllable dataset
+    DATASET_FILE = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel_samesyllable/{}.jsonl".format(DATASET_TYPE)
+    CONSTRAINT_PATH = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel_samesyllable/constraints/{}_len.{}".format(DATASET_TYPE, SYLLABLE_TYPE)
+else:
+    DATASET_FILE = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel/{}.jsonl".format(DATASET_TYPE)
+    CONSTRAINT_PATH = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel/constraints/{}_len.{}".format(DATASET_TYPE, SYLLABLE_TYPE)
 
 def main():
     print("DATASET_FILE:", DATASET_FILE)
@@ -54,6 +67,7 @@ def compute_scores(reference_texts, output_texts, constraint_path):
         print('Constraint path not exist: {}'.format(constraint_path))
         constraint_lns = None
     if constraint_lns != None:
+        print(f"{len(output_lns)=} {len(reference_lns)=} {len(constraint_lns)=}")
         assert len(output_lns) == len(reference_lns) == len(constraint_lns)
 
     # Compute scores
@@ -69,7 +83,6 @@ def compute_scores(reference_texts, output_texts, constraint_path):
     print("out_lens:", out_lens[0:3])
 
     len_acc, len_diff = calculate_acc(out=out_lens, tgt=tgt_lens)
-    breakpoint()
     # 音韻数の正解率
     scores['length_accuracy {}'.format(SYLLABLE_TYPE)] = len_acc
     # 音韻数の平均誤差
@@ -81,8 +94,18 @@ def compute_scores(reference_texts, output_texts, constraint_path):
     ter = sum(ters) / len(ters)
     scores['TER'] = ter
 
+    # Compute ROUGE
+    # rouge = calculate_rouge(output_lns, reference_lns)
+    # scores.update(rouge)
+
+    # Compute BERTScore
+    bertscore = calculate_bertscore(output_lns, reference_lns)
+    scores.update(bertscore)
+
+    breakpoint()
+
     # Save result
-    with open(os.path.join(OUTPUT_DIR, "{}_metrics.txt".format(SYLLABLE_TYPE)), 'w', encoding='utf8') as f:
+    with open(os.path.join(OUTPUT_DIR, "{}_{}_metrics.txt".format(SAVE_FILES_NAME,SYLLABLE_TYPE)), 'w', encoding='utf8') as f:
         f.write(json.dumps(scores, indent=4, ensure_ascii=False))
 
     # Metric for result comparison file
@@ -120,7 +143,7 @@ def generate_result_comparison_file(srcs, outputs, refs, scores):
                'out: {}\n' \
                '----------------------------------------\n'.format(src_s, ref_s, out_s)
 
-    with open(os.path.join(OUTPUT_DIR, "{}_generated_predictions.txt".format(SYLLABLE_TYPE)), 'w') as f:
+    with open(os.path.join(OUTPUT_DIR, "{}_{}_generated_predictions.txt".format(SAVE_FILES_NAME,SYLLABLE_TYPE)), 'w') as f:
         f.write(ret)
 
 
@@ -132,6 +155,40 @@ def calculate_sacrebleu(out, ref, ja_tokenize=True):
     else:
         result = metric.compute(predictions=out, references=ref)
     ret = {'bleu': round(result['score'], 4)}
+    return ret
+
+def calculate_rouge(out, ref):
+    metric = evaluate.load("rouge",cache_dir=cache_dir)
+    # Turn use_aggregator off to get per-sentence scores
+    result = metric.compute(predictions=out, references=ref, rouge_types=["rouge1","rouge2","rougeL"])
+    #tokneizer=
+    ret = {'rouge1': round(result['rouge1'].mid.fmeasure, 4),
+           'rouge2': round(result['rouge2'].mid.fmeasure, 4),
+           'rougeL': round(result['rougeL'].mid.fmeasure, 4)}
+    return ret
+
+def calculate_bertscore(out, ref):
+    metric = evaluate.load("bertscore",cache_dir=cache_dir)
+    result = metric.compute(predictions=out, references=ref, lang='ja') # mBERT
+    precision = sum(result['precision']) / len(result['precision'])
+    recall = sum(result['recall']) / len(result['recall'])
+    f1 = 1/((1/precision + 1/recall)/2)
+    breakpoint()
+    ret = {
+        'bertscore precision': round(precision, 4),
+        'bertscore recall': round(recall, 4),
+        'bertscore f1': round(f1, 4)
+    }
+    return ret
+
+def calculate_sentence_bleu(out, ref):
+    out = [[i] for i in out]
+    ref = [[[i]] for i in ref]
+    ret = []
+    metric = evaluate.load("sacrebleu",cache_dir=cache_dir)
+    for i in range(len(out)):
+        t = metric.compute(predictions=out[i], references=ref[i], tokenize='ja-mecab', use_effective_order=True)
+        ret.append(t['score'])
     return ret
 
 # For Japanese
@@ -179,16 +236,6 @@ class SyllableCounterJA:
     def count_syllable_sentence_batch(cls, batch):
         syllables = [cls.count_syllable_sentence(i) for i in batch]
         return syllables
-
-def calculate_sentence_bleu(out, ref):
-    out = [[i] for i in out]
-    ref = [[[i]] for i in ref]
-    ret = []
-    metric = evaluate.load("sacrebleu",cache_dir=cache_dir)
-    for i in range(len(out)):
-        t = metric.compute(predictions=out[i], references=ref[i], tokenize='ja-mecab', use_effective_order=True)
-        ret.append(t['score'])
-    return ret
 
 
 def calculate_acc(out, tgt):
