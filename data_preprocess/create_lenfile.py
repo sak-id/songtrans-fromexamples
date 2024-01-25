@@ -12,8 +12,8 @@ import cmudict
 
 DATASET_TYPE = "test" # "val" or "test"
 
-DATASET_FILE = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel_samesyllable/{}.jsonl".format(DATASET_TYPE)
-OUTPUT_FILE = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel_samesyllable/constraints/"
+DATASET_FILE = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel/{}.jsonl".format(DATASET_TYPE)
+OUTPUT_FILE = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel/constraints/"
 
 def main():
     print("DATASET_FILE:", DATASET_FILE)

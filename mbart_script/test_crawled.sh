@@ -1,6 +1,6 @@
 #!usr/bin/env bash
 
-CHECKPOINT=
+CHECKPOINT=75879
 MODEL_DIR=mbart_bt_pre_for_genre
 
 CUDA_VISIBLE_DEVICES=0 \

@@ -2,10 +2,15 @@ import os
 import json
 import pandas as pd
 # parallel_path = '/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_bt/full.jsonl'
-output_dir = '/raid/ieda/trans_jaen_dataset/Data/text_datasets/data_crawled'
-input_dir = '/raid/ieda/trans_jaen_dataset/Data/source_data/data_crawled'
+output_dir = '/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel'
+input_dir = '/raid/ieda/trans_jaen_dataset/Data/source_data/data_parallel'
 def main():
-    json_devide_to_train_val()
+    # full_train = load_csv(input_dir + '/jpop_train.csv')
+    # shuffle_json_to_train_val(full_train,os.path.join(output_dir, 'train.jsonl'))
+    # full_val = load_csv(input_dir + '/jpop_val.csv')
+    # shuffle_json_to_train_val(full_val,os.path.join(output_dir, 'val.jsonl'))
+    full_test = load_csv(input_dir + '/test.csv')
+    shuffle_json_to_train_val(full_test,os.path.join(output_dir, 'test.jsonl'))
     pass
 
 # for bt data
@@ -127,18 +132,29 @@ def do_shuffle():
         f.writelines(full_target)
 
 
-# def json_devide_to_train_val_test():
-#     full_parallel = load_data(parallel_path)
-#     len_parallel = len(full_parallel)
-#     train_data = full_parallel[:int(len_parallel*0.8)]
-#     val_data = full_parallel[int(len_parallel*0.8):int(len_parallel*0.9)]
-#     test_data = full_parallel[int(len_parallel*0.9):]
-#     print(f"train: {len(train_data)} lines")
-#     print(f"val: {len(val_data)} lines")
-#     breakpoint()
-#     save_data(train_data, os.path.join(output_dir, 'train.jsonl'))
-#     save_data(val_data, os.path.join(output_dir, 'val.jsonl'))
-#     save_data(test_data, os.path.join(output_dir, 'test.jsonl'))
+def shuffle_json_to_train_val(df_data,output_path):
+    # shuffle, then save as jsonl
+    assert type(df_data)==pd.core.frame.DataFrame
+    df_data = df_data.sample(frac=1, random_state=42)
+    with open(output_path,"w") as f:
+        for en_text,ja_text in zip(df_data['en'],df_data['ja']):
+            f.write(json.dumps({"translation": {"en":en_text.strip("\n"),"ja":ja_text.strip("\n").strip("　")}},ensure_ascii=False))
+            f.write("\n")
+
+
+def load_csv(input_path):
+    df = pd.read_csv(input_path)
+    en_text = df.iloc[0]['en'].split("\n")
+    ja_text = df.iloc[0]['ja'].split("\n")
+    new_df = pd.DataFrame(columns=['en', 'ja'])
+    for i in range(1,len(df)):
+        # 曲ごとに英語歌詞・日本語歌詞を取得
+        en_text = df.iloc[i]['en'].split("\n")
+        ja_text = df.iloc[i]['ja'].split("\n")
+        # new_dfに追加
+        tmp_df = pd.DataFrame({'en': en_text, 'ja': ja_text})
+        new_df = pd.concat([new_df, tmp_df])
+    return new_df
 
 def load_data(data_path):
     with open(data_path, 'r') as f:

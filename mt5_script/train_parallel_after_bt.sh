@@ -1,15 +1,18 @@
 #!usr/bin/env bash
 
-CUDA_VISIBLE_DEVICES=1 \
+MODEL_DIR=/raid/ieda/examples_result/mt5_bt_pre_finetuned/checkpoint-253380
+OUTPUT_DIR=mt5_parallel_after_bt
+
+CUDA_VISIBLE_DEVICES=0 \
 python run_translation.py \
-    --model_name_or_path facebook/mbart-large-50-one-to-many-mmt \
+    --model_name_or_path $MODEL_DIR \
     --do_train \
     --do_eval \
     --source_lang en_XX \
     --target_lang ja_XX \
     --train_file /raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel/train.jsonl\
     --validation_file /raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel/val.jsonl\
-    --output_dir /raid/ieda/examples_result/lora_parallel_only \
+    --output_dir /raid/ieda/examples_result/${OUTPUT_DIR} \
     --forced_bos_token ja_XX \
     --per_device_train_batch_size=16 \
     --per_device_eval_batch_size=16 \
@@ -21,4 +24,4 @@ python run_translation.py \
     --seed 42 \
     --report_to tensorboard \
     --logging_steps 54 \
-    --enable_peft
+    --logging_first_step

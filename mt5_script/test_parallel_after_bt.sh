@@ -1,8 +1,7 @@
 #!usr/bin/env bash
 
-TESTSET_VER=test # val, test
-CHECKPOINT=253380 #202704,228042,253380
-MODEL_DIR=mt5_bt_pre_finetuned
+CHECKPOINT=756 # 540
+MODEL_DIR=mt5_parallel_after_bt
 
 CUDA_VISIBLE_DEVICES=0 \
 python run_translation.py \
@@ -11,8 +10,8 @@ python run_translation.py \
     --source_lang en_XX \
     --target_lang ja_XX \
     --forced_bos_token ja_XX \
-    --test_file /raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel/${TESTSET_VER}.jsonl\
-    --output_dir /raid/ieda/examples_result/${MODEL_DIR}/${TESTSET_VER}result-${CHECKPOINT} \
+    --test_file /raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel/test.jsonl\
+    --output_dir /raid/ieda/examples_result/${MODEL_DIR}/result-${CHECKPOINT} \
     --overwrite_output_dir \
     --predict_with_generate \
     --seed 42 #\

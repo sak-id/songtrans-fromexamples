@@ -93,10 +93,6 @@ def compute_scores(reference_texts, output_texts, constraint_path):
     ter = calculate_ter(output_lns, reference_lns)
     scores['TER'] = ter
 
-    # Compute ROUGE
-    # rougeはまだ正しく動かない
-    # rouge = calculate_rouge(output_lns, reference_lns)
-    # scores.update(rouge)
 
     # Compute BERTScore
     bertscore = calculate_bertscore(output_lns, reference_lns)
@@ -113,6 +109,9 @@ def compute_scores(reference_texts, output_texts, constraint_path):
     scores = {'bleu': ['{:.4f}'.format(i) for i in bleus]}
     ch_count = ['{} / {}'.format(i, j) for i, j in zip(out_lens, tgt_lens)]
     scores['len'] = ch_count
+
+    bertscores = calculate_sentence_bertscore(output_lns, reference_lns)  # Sentence-level BERTScore
+    scores['bertscore'] = ['{:.4f}'.format(i) for i in bertscores]
 
     return scores
 
@@ -157,20 +156,20 @@ def calculate_sacrebleu(out, ref, ja_tokenize=True):
     ret = {'bleu': round(result['score'], 4)}
     return ret
 
-def calculate_rouge(out, ref):
-    # 現状rouge1が全て0.5, rouge2が全て0.0になっている
-    # rougeLはRougeScorer._lcs_tableでエラーが出ている
-    metric = evaluate.load("rouge",cache_dir=cache_dir)
-    # Turn use_aggregator off to get per-sentence scores
-    # run_translation.pyでつかているMBartは入力が英語で固定のため使えない
-    mytokenizer = AutoTokenizer.from_pretrained("ku-nlp/bart-large-japanese", cache_dir=cache_dir)
-    result = metric.compute(predictions=out, references=ref, rouge_types=["rouge1","rouge2"],tokenizer=mytokenizer)
-    ret = {
-        'rouge1': round(result['rouge1'], 4),
-        'rouge2': round(result['rouge2'], 4),
-        # 'rougeL': round(result['rougeL'], 4)
-    }
-    return ret
+# def calculate_rouge(out, ref):
+#     # 現状rouge1が全て0.5, rouge2が全て0.0になっている
+#     # rougeLはRougeScorer._lcs_tableでエラーが出ている
+#     metric = evaluate.load("rouge",cache_dir=cache_dir)
+#     # Turn use_aggregator off to get per-sentence scores
+#     # run_translation.pyでつかているMBartは入力が英語で固定のため使えない
+#     mytokenizer = AutoTokenizer.from_pretrained("ku-nlp/bart-large-japanese", cache_dir=cache_dir)
+#     result = metric.compute(predictions=out, references=ref, rouge_types=["rouge1","rouge2"],tokenizer=mytokenizer)
+#     ret = {
+#         'rouge1': round(result['rouge1'], 4),
+#         'rouge2': round(result['rouge2'], 4),
+#         # 'rougeL': round(result['rougeL'], 4)
+#     }
+#     return ret
 
 def calculate_ter(out, ref):
     ter = evaluate.load("ter",cache_dir=cache_dir)
@@ -199,6 +198,13 @@ def calculate_sentence_bleu(out, ref):
     for i in range(len(out)):
         t = metric.compute(predictions=out[i], references=ref[i], tokenize='ja-mecab', use_effective_order=True)
         ret.append(t['score'])
+    return ret
+
+def calculate_sentence_bertscore(out, ref):
+    ret = []
+    metric = evaluate.load("bertscore",cache_dir=cache_dir)
+    result = metric.compute(predictions=out, references=ref, lang='ja')
+    ret = result['f1']
     return ret
 
 # For Japanese

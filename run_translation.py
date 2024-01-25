@@ -46,9 +46,7 @@ from transformers import (
     Seq2SeqTrainingArguments,
     default_data_collator,
     set_seed,
-    TrainerState,
-    TrainerControl,
-    TrainerCallback,
+    T5Tokenizer,
 )
 from transformers.trainer_utils import get_last_checkpoint, PREFIX_CHECKPOINT_DIR
 from transformers.utils import check_min_version, send_example_telemetry
@@ -349,12 +347,15 @@ def main():
     else:
         data_files = {}
         if data_args.train_file is not None:
+            print("train_file:",data_args.train_file)
             data_files["train"] = data_args.train_file
             extension = data_args.train_file.split(".")[-1]
         if data_args.validation_file is not None:
+            print("validation_file:",data_args.validation_file)
             data_files["validation"] = data_args.validation_file
             extension = data_args.validation_file.split(".")[-1]
         if data_args.test_file is not None:
+            print("test_file:",data_args.test_file)
             data_files["test"] = data_args.test_file
             extension = data_args.test_file.split(".")[-1]
         if extension=="jsonl": extension="json" # load_dataset cannot load jsonl
@@ -415,16 +416,18 @@ def main():
             # モデルによりtarget_modulesを変える
             if "mbart" in model_args.model_name_or_path:
                 peft_config = LoraConfig(
-                    r=4,
+                    r=8,
+                    lora_alpha=16, # default 8
                     task_type=TaskType.SEQ_2_SEQ_LM,
-                    target_modules=["q_proj", "v_proj"],
+                    target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],
                     inference_mode=False,
                 )
             elif "mt5" in model_args.model_name_or_path:
                 peft_config = LoraConfig(
-                    r=4,
+                    r=16,
+                    lora_alpha=16,
                     task_type=TaskType.SEQ_2_SEQ_LM,
-                    target_modules=["q", "v"],
+                    target_modules=["q", "v", "k", "o"],
                     inference_mode=False,
                 )
             else:
@@ -432,7 +435,7 @@ def main():
             model = get_peft_model(model, peft_config)
             print(f"{peft_config.inference_mode=}")
             model.print_trainable_parameters()
-            # breakpoint()
+            breakpoint()
         elif training_args.do_predict:
             model = PeftModel.from_pretrained(model, model_id=model_args.peft_path, is_training=False)
             
@@ -468,7 +471,12 @@ def main():
         )
         # model.config.forced_bos_token_id = forced_bos_token_id
         model.generation_config.bos_token_id = forced_bos_token_id
-        assert forced_bos_token_id==250012, NotImplementedError("forced_bos_token_id must be 250012")
+        assert forced_bos_token_id==250012, NotImplementedError("forced_bos_token_id must be 250012 in Japanese")
+    elif isinstance(tokenizer, T5Tokenizer) and training_args.enable_peft:
+        model.generation_config.bos_token_id = 250012
+        assert forced_bos_token_id==250012, NotImplementedError("forced_bos_token_id must be 250012 in Japanese")
+        print("mt5peft") #おそらく設定できていない breakpointしなかった
+        breakpoint()
 
     # Get the language codes for input/target.
     source_lang = data_args.source_lang.split("_")[0]
@@ -570,7 +578,7 @@ def main():
         )
 
     # Metric
-    metric = evaluate.load("sacrebleu",cache_dir=model_args.cache_dir)
+    metric = evaluate.load("sacrebleu",cache_dir=model_args.cache_dir) #seed=training_args.seed
 
     def postprocess_text(preds, labels):
         preds = [pred.strip() for pred in preds]
@@ -599,14 +607,6 @@ def main():
         result = {k: round(v, 4) for k, v in result.items()}
         return result
     
-    # checking sacrebleu
-    # print(metric.compute(predictions=["hello how are you", "hoge hoge"],references=[["Hi how are you", "hoge hoge"],["foo bar foo", "foo bar foobar"]]))
-    # {'score': 42.3240862445307, 'counts': [3, 2, 1, 0], 'totals': [6, 4, 2, 1], 'precisions': [50.0, 50.0, 50.0, 50.0], 'bp': 0.846481724890614, 'sys_len': 6, 'ref_len': 7}
-    # print(metric.compute(predictions=["猫がこたつで丸くなる", "こんにちは"],references=[["猫とこたつで丸くなる", "こんにちは"],["猫とこたつ", "ねこねこ"]]))
-    # {'score': 0.0, 'counts': [0, 0, 0, 0], 'totals': [2, 0, 0, 0], 'precisions': [0.0, 0.0, 0.0, 0.0], 'bp': 1.0, 'sys_len': 2, 'ref_len': 2}
-    # metric.compute(predictions=predictions, references=references,tokenize="ja-mecab")
-    # {'score': 44.81526019296195, 'counts': [5, 3, 2, 1], 'totals': [7, 5, 4, 3], 'precisions': [71.42857142857143, 60.0, 50.0, 33.333333333333336], 'bp': 0.8668778997501817, 'sys_len': 7, 'ref_len': 8}
-
     # Initialize our Trainer
     trainer = Seq2SeqTrainer(
         model=model,

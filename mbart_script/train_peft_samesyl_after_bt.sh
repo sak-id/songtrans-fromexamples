@@ -1,23 +1,24 @@
 #!usr/bin/env bash
 
+# train with same-syllable parallel data
 MODEL_DIR=/raid/ieda/examples_result/mbart_bt_pre_finetuned/checkpoint-50676
-OUTPUT_DIR=mbart_peft_parallel_after_bt_trial
+OUTPUT_DIR=mbart_peft_samesyl_after_bt
 
-CUDA_VISIBLE_DEVICES=1 \
+CUDA_VISIBLE_DEVICES=0 \
 python run_translation.py \
     --model_name_or_path $MODEL_DIR \
     --do_train \
     --do_eval \
     --source_lang en_XX \
     --target_lang ja_XX \
-    --train_file /raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel/train.jsonl\
-    --validation_file /raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel/val.jsonl\
+    --train_file /raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel_samesyllable/train.jsonl\
+    --validation_file /raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel_samesyllable/val.jsonl\
     --output_dir /raid/ieda/examples_result/${OUTPUT_DIR} \
     --forced_bos_token ja_XX \
     --per_device_train_batch_size=16 \
     --per_device_eval_batch_size=16 \
     --overwrite_output_dir \
-    --num_train_epochs 20 \
+    --num_train_epochs 10 \
     --save_strategy epoch \
     --predict_with_generate \
     --evaluation_strategy epoch\
