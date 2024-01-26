@@ -416,7 +416,7 @@ def main():
             # モデルによりtarget_modulesを変える
             if "mbart" in model_args.model_name_or_path:
                 peft_config = LoraConfig(
-                    r=8,
+                    r=16,
                     lora_alpha=16, # default 8
                     task_type=TaskType.SEQ_2_SEQ_LM,
                     target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],
@@ -578,7 +578,8 @@ def main():
         )
 
     # Metric
-    metric = evaluate.load("sacrebleu",cache_dir=model_args.cache_dir) #seed=training_args.seed
+    metric_bleu = evaluate.load("sacrebleu",cache_dir=model_args.cache_dir,) #seed=training_args.seed
+    metric_bertscore = evaluate.load("bertscore",cache_dir=model_args.cache_dir,) #seed=training_args.seed
 
     def postprocess_text(preds, labels):
         preds = [pred.strip() for pred in preds]
@@ -598,9 +599,20 @@ def main():
 
         # Some simple post-processing
         decoded_preds, decoded_labels = postprocess_text(decoded_preds, decoded_labels)
+        
+        bertscore_result = metric_bertscore.compute(predictions=decoded_preds, references=decoded_labels, lang="ja")
+        bert_precision= sum(bertscore_result["precision"])/len(bertscore_result["precision"])
+        bert_recall= sum(bertscore_result["recall"])/len(bertscore_result["recall"])
+        result = {
+            "bert_f1": 2*bert_precision*bert_recall/(bert_precision+bert_recall),
+            "bert_precision": bert_precision,
+            "bert_recall": bert_recall,
+        }
+
         do_tokenize = 'ja-mecab'
-        result = metric.compute(predictions=decoded_preds, references=decoded_labels,tokenize=do_tokenize)
-        result = {"bleu": result["score"]}
+        bleu_result = metric_bleu.compute(predictions=decoded_preds, references=decoded_labels,tokenize=do_tokenize)
+        # result = {"bleu": bleu_result["score"]}
+        result["bleu"] = bleu_result["score"]
         
         prediction_lens = [np.count_nonzero(pred != tokenizer.pad_token_id) for pred in preds]
         result["gen_len"] = np.mean(prediction_lens)

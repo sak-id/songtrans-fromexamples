@@ -1,6 +1,6 @@
 #!usr/bin/env bash
 
-CHECKPOINT=756 # 540
+CHECKPOINT=436 #218
 MODEL_DIR=mt5_parallel_after_bt
 
 CUDA_VISIBLE_DEVICES=0 \

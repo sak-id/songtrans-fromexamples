@@ -1,6 +1,6 @@
 #!usr/bin/env bash
 
-CHECKPOINT=756
+CHECKPOINT=109
 MODEL_DIR=mbart_parallel_only
 
 CUDA_VISIBLE_DEVICES=1 \

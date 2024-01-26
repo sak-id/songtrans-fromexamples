@@ -24,6 +24,6 @@ python run_translation.py \
     --evaluation_strategy epoch\
     --seed 42 \
     --report_to tensorboard \
-    --logging_steps 54 \
+    --logging_steps 0.05 \
     --logging_first_step \
     --enable_peft

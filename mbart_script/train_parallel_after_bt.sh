@@ -1,7 +1,7 @@
 #!usr/bin/env bash
 
 MODEL_DIR=/raid/ieda/examples_result/mbart_bt_pre_finetuned/checkpoint-50676
-OUTPUT_DIR=mbart_parallel_after_bt3
+OUTPUT_DIR=mbart_parallel_after_bt
 
 CUDA_VISIBLE_DEVICES=0 \
 python run_translation.py \

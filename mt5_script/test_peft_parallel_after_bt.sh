@@ -1,7 +1,7 @@
 #!usr/bin/env bash
 
 PRETRAINED_MODEL_DIR=/raid/ieda/examples_result/mt5_bt_pre_finetuned/checkpoint-253380
-CHECKPOINT=1620 #1404
+CHECKPOINT=1090 #218
 MODEL_DIR=mt5_peft_parallel_after_bt
 
 CUDA_VISIBLE_DEVICES=0 \

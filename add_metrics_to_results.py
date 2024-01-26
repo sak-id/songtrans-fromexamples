@@ -14,12 +14,12 @@ cache_dir="/raid/ieda/dataset_cache"
 
 # specify dataset/file files
 DATASET_TYPE = "test" # "val" or "test"
-MODEL_DIR = "mbart_bt_pre_finetuned"
-CHECKPOINT=50676
+MODEL_DIR = "mbart_parallel_only"
+CHECKPOINT=109
 SYLLABLE_TYPE = "target" # "target" or "source
-SAVE_FILES_NAME = "samesyllable" # "val" or "test" or "samesyllable"
+SAVE_FILES_NAME = "test" # "val" or "test" or "samesyllable"
 # For backtranslation model
-bt_pre_prefix = "test" # test or samesyllable or val
+bt_pre_prefix = "" # test or samesyllable or val
 
 # you don't need to change these
 if "result" in MODEL_DIR: # for not trained model
@@ -84,10 +84,10 @@ def compute_scores(reference_texts, output_texts, constraint_path):
     # 音韻数の正解率
     scores['length_accuracy {}'.format(SYLLABLE_TYPE)] = len_acc
     # 音韻数の平均誤差
-    scores['length_difference {}'.format(SYLLABLE_TYPE)] = len_diff
+    scores['length_diff_average {}'.format(SYLLABLE_TYPE)] = len_diff
     # 音韻数誤差の分散
-    # len_var = calculate_variance(out_lens, tgt_lens)
-    # scores['length_variance {}'.format(SYLLABLE_TYPE)] = len_var
+    len_var = calculate_variance(out_lens, tgt_lens)
+    scores['length_diff_var {}'.format(SYLLABLE_TYPE)] = len_var
 
     # Compute Translate Edit Rate (TER)
     ter = calculate_ter(output_lns, reference_lns)
@@ -95,10 +95,8 @@ def compute_scores(reference_texts, output_texts, constraint_path):
 
 
     # Compute BERTScore
-    bertscore = calculate_bertscore(output_lns, reference_lns)
+    bertscore, bert_F1 = calculate_bertscore(output_lns, reference_lns) # bertscore : precision, recall, f1. bert_F1 : f1(list)
     scores.update(bertscore)
-
-    breakpoint()
 
     # Save result
     with open(os.path.join(OUTPUT_DIR, "{}_{}_metrics.txt".format(SAVE_FILES_NAME,SYLLABLE_TYPE)), 'w', encoding='utf8') as f:
@@ -110,8 +108,8 @@ def compute_scores(reference_texts, output_texts, constraint_path):
     ch_count = ['{} / {}'.format(i, j) for i, j in zip(out_lens, tgt_lens)]
     scores['len'] = ch_count
 
-    bertscores = calculate_sentence_bertscore(output_lns, reference_lns)  # Sentence-level BERTScore
-    scores['bertscore'] = ['{:.4f}'.format(i) for i in bertscores]
+    # bertscores = calculate_sentence_bertscore(output_lns, reference_lns)  # Sentence-level BERTScore
+    scores['bertscore_F1'] = ['{:.4f}'.format(i) for i in bert_F1]
 
     return scores
 
@@ -156,21 +154,6 @@ def calculate_sacrebleu(out, ref, ja_tokenize=True):
     ret = {'bleu': round(result['score'], 4)}
     return ret
 
-# def calculate_rouge(out, ref):
-#     # 現状rouge1が全て0.5, rouge2が全て0.0になっている
-#     # rougeLはRougeScorer._lcs_tableでエラーが出ている
-#     metric = evaluate.load("rouge",cache_dir=cache_dir)
-#     # Turn use_aggregator off to get per-sentence scores
-#     # run_translation.pyでつかているMBartは入力が英語で固定のため使えない
-#     mytokenizer = AutoTokenizer.from_pretrained("ku-nlp/bart-large-japanese", cache_dir=cache_dir)
-#     result = metric.compute(predictions=out, references=ref, rouge_types=["rouge1","rouge2"],tokenizer=mytokenizer)
-#     ret = {
-#         'rouge1': round(result['rouge1'], 4),
-#         'rouge2': round(result['rouge2'], 4),
-#         # 'rougeL': round(result['rougeL'], 4)
-#     }
-#     return ret
-
 def calculate_ter(out, ref):
     ter = evaluate.load("ter",cache_dir=cache_dir)
     result = ter.compute(predictions=out, references=ref,normalized=True,support_zh_ja_chars=True)
@@ -188,7 +171,7 @@ def calculate_bertscore(out, ref):
         'bertscore recall': round(recall, 4),
         'bertscore f1': round(f1, 4)
     }
-    return ret
+    return ret, result['f1']
 
 def calculate_sentence_bleu(out, ref):
     out = [[i] for i in out]
@@ -200,12 +183,12 @@ def calculate_sentence_bleu(out, ref):
         ret.append(t['score'])
     return ret
 
-def calculate_sentence_bertscore(out, ref):
-    ret = []
-    metric = evaluate.load("bertscore",cache_dir=cache_dir)
-    result = metric.compute(predictions=out, references=ref, lang='ja')
-    ret = result['f1']
-    return ret
+# def calculate_sentence_bertscore(out, ref):
+#     ret = []
+#     metric = evaluate.load("bertscore",cache_dir=cache_dir)
+#     result = metric.compute(predictions=out, references=ref, lang='ja')
+#     ret = result['f1']
+#     return ret
 
 # For Japanese
 class SyllableCounterJA:
@@ -270,7 +253,9 @@ def calculate_acc(out, tgt):
 
 def calculate_variance(out,tgt):
     mora_diff = [abs(i-j) for i,j in zip(out,tgt)]
-    raise NotImplementedError
+    diff_average = sum(mora_diff)/len(mora_diff)
+    diff_square = [(i-diff_average)**2 for i in mora_diff]
+    return sum(diff_square)/len(diff_square)
 
 
 if __name__ == "__main__":

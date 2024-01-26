@@ -1,30 +1,36 @@
 # 実行したもの
 
 基本raidにしまう
+| モデル | Lora | 事前学習済み | データセット | スクリプト | 保存場所 | 備考 |
+| ---- |----|----|----|----|---- | ---- |
+| mBART | | | | test_pretrained.sh | mbart_no_train_result | 元のモデル|
+| mBART | |  | parallel | train_parallel_only.sh | mbart_parallel_only| 過学習 testまだ|
+| mBART |  |  | bt | train_bt.sh | raid mbart_bt_pre_finetuned | 事前学習　新しいtestでtest|
+| mBART| | True | parallel| train_parallel_after_bt.sh | mbart_parallel_after_bt | gpu01でtrain中| 
+| mBART| True| True | parallel| train_peft_parallel_after_bt.sh | mbart_peft_parallel_after_bt | testまだ| 
+| mT5 |  | | bt | train_bt.sh | mt5_bt_pre_finetuned | 事前学習 新しいtestでtest|
+| mT5 | |True |parallel| train_parallel_after_bt.sh | mt5_parallel_after_bt | gpu07でtrain中|
+| mT5 |True |True |parallel| train_peft_parallel_after_bt.sh | mt5_peft_parallel_after_bt | gpu07でtrain中|
 
+
+## shuffle_incorrect内
+全ての行をシャッフルしていたせいでbleuが上がった
 | モデル | Lora | 事前学習済み | データセット | スクリプト | 保存場所 | 備考 |
 | ---- |----|----|----|----|---- | ---- |
 | mBART |  |  | 学習なし | test_pretrained.sh | pretrained_model_result | 学習前のtest 4.7664|
 | mBART |  |  | parallel | train_parallel_only.sh | mbart_parallel_only | 過学習 test bleu |
 | mBART | Lora |  | parallel | train_peft_parallel_only.sh | | test bleu 1.5006|
-| mBART |  |  | bt | train_bt.sh | raid mbart_bt_pre_finetuned | 事前学習|
 | mBART |  | bt_pre | parallel|train_parallel_after_bt.sh | mbart_parallel_after_bt3 | 過学習 test bleu 3.5175|
 | mBART | Lora | bt_pre | parallel | train_peft_parallel_after_bt.sh | mbart_peft_paralllel_after_bt_r16_alpha16 | test bleu 2.8334|
 | mBART | Lora | bt_pre | samesyllable | train_peft_samesyl_after_bt.sh | mbart_peft_samesyl_after_bt | test bleu  4.0758 |
-| mT5 |  | | bt | train_bt.sh | mt5_bt_pre_finetuned | 事前学習 |
 | mT5 |  | bt_pre | parallel | train_parallel_after_bt | mt5_parallel_after_bt | test_bleu 2.75 (540)|
 | mT5 | Lora | bt_pre | parallel | train_peft_parallel_after_bt.sh|mt5_peft_parallel_after_bt |test bleu 1.9711|
-
-### まだ実行していないもの
-| モデル | Lora | 事前学習済み | データセット | スクリプト | 保存場所 | 備考 |
-| ---- |----|----|----|----|---- | ---- |
-| mT5 |  | | parallel | train_parallel_only.sh | mt5_parallel_only |まだ|
-| mT5 | Lora | | parallel | train_peft_parallel_only.sh | mt5_peft_parallel_only | trainでeval_bleuが0<br>多分mt5はfine-tuningしないとtaskが解けないから|
 
 ## ジャンル個人適応用
 | モデル | Lora | 事前学習済み | データセット | スクリプト | 保存場所 | 備考 |
 | ---- |----|----|----|----|---- | ---- |
 | mBART | False | No | crawled | train_crawled.sh | mbart_bt_pre_for_genre | checkpoint50586 best|
+->bt_preが使える。使わない
 
 ## 今使ってない奴ら(unused_for_now内)
 | モデル | Lora | 事前学習済み | データセット | スクリプト | 保存場所 | 備考 |
