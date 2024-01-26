@@ -7,51 +7,55 @@ import spacy
 import nltk
 import cmudict
 
-INPUT_DIR = "/raid/ieda/trans_jaen_dataset/Data/source_data/data_parallel/"
+INPUT_DIR = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel/"
 OUTPUT_DIR = "/raid/ieda/trans_jaen_dataset/Data/json_datasets/data_parallel_samesyllable/"
 
 def main():
-    with open(os.path.join(INPUT_DIR, "shuffled_full.source"), "r") as f:
-        source_texts = f.readlines()
-    with open(os.path.join(INPUT_DIR, "shuffled_full.target"), "r") as f:
-        target_texts = f.readlines()
-    assert len(source_texts) == len(target_texts)
-    print("len(source_texts):", len(source_texts))
-    
+    # read train and val jsonl files
+    with open(os.path.join(INPUT_DIR, "train.jsonl"), "r") as f:
+        train_jsonl = [json.loads(line) for line in f.readlines()]
+    with open(os.path.join(INPUT_DIR, "val.jsonl"), "r") as f:
+        val_jsonl = [json.loads(line) for line in f.readlines()]
+    train_raw_source = [line["translation"]["en"] for line in train_jsonl]
+    train_raw_target = [line["translation"]["ja"] for line in train_jsonl]
+    val_raw_source = [line["translation"]["en"] for line in val_jsonl]
+    val_raw_target = [line["translation"]["ja"] for line in val_jsonl]
+
     # count syllables in english:
-    en_lens = SyllableCounter.count_syllable_sentence_batch(source_texts)
-    print("en_lens:", en_lens[0:3])
-    print("len(en_lens):", len(en_lens))
+    en_utils = SyllableCounter()
+    train_en_syllables = en_utils.count_syllable_sentence_batch(train_raw_source)
+    val_en_syllables = en_utils.count_syllable_sentence_batch(val_raw_source)
+    print("train_en_syllables:", train_en_syllables[0:3])
+    print("val_en_syllables:", val_en_syllables[0:3])
     # count syllables in japanese:
-    ja_lens = SyllableCounterJA.count_syllable_sentence_batch(target_texts)
-    print("ja_lens:", ja_lens[0:3])
-    print("len(ja_lens):", len(ja_lens))
+    ja_utils = SyllableCounterJA()
+    train_ja_syllables = ja_utils.count_syllable_sentence_batch(train_raw_target)
+    val_ja_syllables = ja_utils.count_syllable_sentence_batch(val_raw_target)
+    print("train_ja_syllables:", train_ja_syllables[0:3])
+    print("val_ja_syllables:", val_ja_syllables[0:3])
 
-    en_dataset = [] # list of sentences with the same number of syllables
-    ja_dataset = []
-    for i in range(len(source_texts)):
-        if en_lens[i] == ja_lens[i]:
-            en_dataset.append(source_texts[i])
-            ja_dataset.append(target_texts[i])
-    print("len(en_dataset):", len(en_dataset))
-    breakpoint()
-    with open(os.path.join(OUTPUT_DIR, "full.jsonl"), "w") as f:
-        for en_text,ja_text in zip(en_dataset,ja_dataset):
-            f.write(json.dumps({"translation": {"en":en_text.strip("\n"),"ja":ja_text.strip("\n").strip("　")}},ensure_ascii=False))
-            f.write("\n")
+    train_source = []
+    train_target = []
 
-    len_source = len(en_dataset)
-    len_target = len(ja_dataset)
-    assert len_source == len_target
-    train_source = en_dataset[:int(len_source*0.8)]
-    train_target = ja_dataset[:int(len_target*0.8)]
-    val_source = en_dataset[int(len_source*0.8):int(len_source*0.9)]
-    val_target = ja_dataset[int(len_target*0.8):int(len_target*0.9)]
-    test_source = en_dataset[int(len_source*0.9):]
-    test_target = ja_dataset[int(len_target*0.9):]
+    # add sentences with the same number of syllables to train dataset
+    for i in range(len(train_raw_source)):
+        if train_en_syllables[i] == train_ja_syllables[i]:
+            train_source.append(train_raw_source[i])
+            train_target.append(train_raw_target[i])
+
+    val_source = []
+    val_target = []
+
+    # add sentences with the same number of syllables to val dataset
+    for i in range(len(val_raw_source)):
+        if val_en_syllables[i] == val_ja_syllables[i]:
+            val_source.append(val_raw_source[i])
+            val_target.append(val_raw_target[i])
+    
     print(f"train: {len(train_source)} lines")
     print(f"val: {len(val_source)} lines")
-    print(f"test: {len(test_source)} lines")
+    assert len(train_source) == len(train_target)
+    assert len(val_source) == len(val_target)
     breakpoint()
     with open(os.path.join(OUTPUT_DIR, "train.jsonl"), "w") as f:
         for en_text,ja_text in zip(train_source,train_target):
@@ -59,10 +63,6 @@ def main():
             f.write("\n")
     with open(os.path.join(OUTPUT_DIR, "val.jsonl"), "w") as f:
         for en_text,ja_text in zip(val_source,val_target):
-            f.write(json.dumps({"translation": {"en":en_text.strip("\n"),"ja":ja_text.strip("\n").strip("　")}},ensure_ascii=False))
-            f.write("\n")
-    with open(os.path.join(OUTPUT_DIR, "test.jsonl"), "w") as f:
-        for en_text,ja_text in zip(test_source,test_target):
             f.write(json.dumps({"translation": {"en":en_text.strip("\n"),"ja":ja_text.strip("\n").strip("　")}},ensure_ascii=False))
             f.write("\n")
 
