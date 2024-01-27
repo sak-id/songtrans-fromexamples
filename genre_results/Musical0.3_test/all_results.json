@@ -1,0 +1,12 @@
+{
+    "predict_bert_f1": 0.7163,
+    "predict_bert_precision": 0.7169,
+    "predict_bert_recall": 0.7157,
+    "predict_bleu": 5.1769,
+    "predict_gen_len": 11.452,
+    "predict_loss": 3.2213637828826904,
+    "predict_runtime": 15.9013,
+    "predict_samples": 177,
+    "predict_samples_per_second": 11.131,
+    "predict_steps_per_second": 1.446
+}

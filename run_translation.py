@@ -111,6 +111,14 @@ class ModelArguments:
         default=None,
         metadata={"help": "Path to PEFT checkpoint."},
     )
+    merge_two_adapters: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Whether to merge two adapters or not."},
+    )
+    merge_rate: Optional[float] = field(
+        default=0.5,
+        metadata={"help": "Rate of merging two adapters. Musical : merge_rate, Pops: 1-merge_rate"},
+    )
 
 @dataclass
 class DataTrainingArguments:
@@ -437,7 +445,22 @@ def main():
             model.print_trainable_parameters()
             breakpoint()
         elif training_args.do_predict:
-            model = PeftModel.from_pretrained(model, model_id=model_args.peft_path, is_training=False)
+            if model_args.merge_two_adapters:
+                model = PeftModel.from_pretrained(model, model_id="/raid/ieda/examples_result/mbart_peft_musical/checkpoint-560", adapter_name="Musical", is_training=False)
+                model.load_adapter("/raid/ieda/examples_result/mbart_peft_pops/checkpoint-153", adapter_name="Pops")
+
+                model.add_weighted_adapter(
+                    adapters=["Musical", "Pops"],
+                    weights=[model_args.merge_rate, 1-model_args.merge_rate],
+                    adapter_name="combined",
+                    combination_type="svd",
+                )
+                model.set_adapter("combined")
+                print(f"Musical: {model_args.merge_rate}, Pops: {1-model_args.merge_rate}")
+                breakpoint()
+            else:
+                assert model_args.peft_path is not None, "peft_path must be specified"
+                model = PeftModel.from_pretrained(model, model_id=model_args.peft_path, is_training=False)
             
     prefix = data_args.source_prefix if data_args.source_prefix is not None else ""
 
